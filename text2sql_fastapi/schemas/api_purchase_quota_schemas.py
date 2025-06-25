@@ -6,6 +6,7 @@ from decimal import Decimal
 class ApiPurchaseQuotaBase(BaseModel):
     api_name: str
     purchase_amount_usd: Annotated[Decimal, condecimal(max_digits=10, decimal_places=2)]
+    token_purchased: Annotated[int, conint(gt=0)]
     notes: Optional[str] = None
 
 class ApiPurchaseQuotaCreate(ApiPurchaseQuotaBase):

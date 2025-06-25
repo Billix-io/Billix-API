@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
@@ -12,9 +12,15 @@ from sqlalchemy import select
 from models.tool import Tool
 from database import get_session
 from config import settings
+from DAL_files.stt_dal import STTDAL
+from DAL_files.tts_dal import TTSDAL
+from schemas.tts_schemas import TTSRequest, TTSResponse
+import base64
 
 load_dotenv()
 query_router = APIRouter()
+stt_service = STTDAL()
+tts_service = TTSDAL()
 
 class QueryRequest(BaseModel):
     db_url: str = "mysql+pymysql://sales_user:1234@5.189.160.119:3306/SALES_AI"
@@ -54,17 +60,42 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
             f"Tool {i+1}:\nName: {t.name}\nDescription: {t.description}\nSQL Template: {t.sql_template}"
             for i, t in enumerate(tools)
         ])
+        # prompt = (
+        #     "You are an expert SQL assistant. Here are some tools, each with a name, description, and SQL template (with placeholders in curly braces):\n\n"
+        #     f"{tool_list_str}\n\n"
+        #     f"Database schema:\n{schema_str}\n\n"
+        #     f"User Query: {request.prompt}\n\n"
+        #     "Instructions:\n"
+        #     "- Select the best tool for the user query (or 'none' if none match).\n"
+        #     "- If a tool is selected, extract the values for each placeholder from the user query or Database schema, fill the SQL template, and return the filled SQL.\n"
+        #     "- Respond in JSON: {\"used_tool\": <tool name or null>, \"sql_query\": <filled SQL or null>, \"params\": <dict of extracted params or null>}"
+        # )
         prompt = (
-            "You are an expert SQL assistant. Here are some tools, each with a name, description, and SQL template (with placeholders in curly braces):\n\n"
-            f"{tool_list_str}\n\n"
-            f"Database schema:\n{schema_str}\n\n"
-            f"User Query: {request.prompt}\n\n"
-            "Instructions:\n"
-            "- Select the best tool for the user query (or 'none' if none match).\n"
-            "- If a tool is selected, extract the values for each placeholder from the user query or Database schema, fill the SQL template, and return the filled SQL.\n"
-            "- Respond in JSON: {\"used_tool\": <tool name or null>, \"sql_query\": <filled SQL or null>, \"params\": <dict of extracted params or null>}"
-        )
-        
+    "You are a highly skilled AI SQL assistant designed to translate natural language queries into accurate SQL queries.\n\n"
+    "You have access to a set of tools. Each tool includes:\n"
+    "- name: The tool's unique name\n"
+    "- description: What the tool is designed to do\n"
+    "- sql_template: A SQL statement containing placeholders in curly braces that must be filled with values derived from the user query or schema.\n\n"
+    f"Available Tools:\n{tool_list_str}\n\n"
+    f"Database Schema:\n{schema_str}\n\n"
+    f"User Query:\n\"{request.prompt}\"\n\n"
+    "Instructions:\n"
+    "1. Analyze the user query carefully and match it to the most appropriate tool based on the tool descriptions.\n"
+    "   - If no tool is suitable, return 'used_tool': null.\n"
+    "2. Identify the correct tables and columns referenced in the query.\n"
+    "   - Match them to the database schema, accounting for case sensitivity (table and column names must exactly match schema definitions).\n"
+    "   - Ensure you use proper table names and correct capitalization as shown in the schema.\n"
+    "3. Extract values for all placeholders in the selected tool's SQL template based on the user query and schema.\n"
+    "4. Fill the SQL template with the extracted values.\n\n"
+    "Respond ONLY in the following JSON format:\n"
+    "{\n"
+    '  "used_tool": "<tool_name or null>",\n'
+    '  "sql_query": "<completed SQL query or null>",\n'
+    '  "params": {<key-value pairs of extracted parameters or null>}\n'
+    "}\n\n"
+    "Ensure your response is fully parsable JSON, with properly quoted strings and keys."
+)
+        print("prompt :",prompt)
         response = agent.run(prompt)
         # Try both response_usage and usage attributes for token usage
         token_usage = getattr(response, "response_usage", None) or getattr(response, "usage", None)
@@ -138,7 +169,8 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
             cleaned_query = clean_sql(sql_query)
             if not re.search(r"\bselect\b", cleaned_query, re.IGNORECASE):
                 raise HTTPException(status_code=400, detail="Generated content is not a SELECT query.")
-                
+            print("cleaned_query :",cleaned_query)
+    
             query_result = sql_tools.run_sql_query(cleaned_query)
             return {
                 "used_tool": None,
@@ -148,3 +180,32 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@query_router.post("/audio-chat")
+async def audio_chat(
+    db: AsyncSession = Depends(get_session),
+    audio: UploadFile = File(None),
+    text: str = None,
+):
+    """
+    Accepts either an audio file or text. If audio is provided, transcribe it, query the DB, and return audio. If text, return text response.
+    """
+    if audio is not None:
+        # 1. Transcribe audio to text
+        transcribed_text = await stt_service.speech_to_text(audio)
+        # 2. Query the DB using the transcribed text
+        request = QueryRequest(prompt=transcribed_text)
+        response = await query_db(request, db)
+        # 3. Convert the result to audio using TTS
+        # Use only the main result text for TTS
+        result_text = str(response["result"]) if isinstance(response, dict) and "result" in response else str(response)
+        tts_request = TTSRequest(text=result_text)
+        audio_bytes = await tts_service.text_to_speech(tts_request)
+        audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+        return {"audio_content": audio_b64, "transcription": transcribed_text}
+    elif text is not None:
+        # 1. Query the DB using the provided text
+        request = QueryRequest(prompt=text)
+        return await query_db(request, db)
+    else:
+        raise HTTPException(status_code=400, detail="You must provide either an audio file or text.")

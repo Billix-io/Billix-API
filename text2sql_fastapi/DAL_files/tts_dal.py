@@ -5,7 +5,7 @@ from schemas.tts_schemas import TTSRequest
 from fastapi import HTTPException
 
 # Use environment variable for API key
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_API_KEY = "sk_a9a4076d830b6a0330d9b19042f1e52089d83bcef77f275c"
 
 # Default values (should match controller)
 DEFAULT_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"

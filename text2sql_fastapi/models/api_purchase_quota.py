@@ -11,5 +11,6 @@ class ApiPurchaseQuota(Base):
     quota_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     api_name = Column(String, nullable=False)
     purchase_amount_usd = Column(Numeric(10, 2), nullable=False)
+    token_purchased = Column(BigInteger, nullable=False)
     purchase_date = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     notes = Column(String, nullable=True) 

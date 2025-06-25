@@ -12,6 +12,7 @@ from controllers.payment_controller import payment_router
 from controllers.tool_controller import tool_router
 from controllers.api_purchase_quota_controller import api_purchase_quota_router
 from controllers.api_usage_controller import api_usage_router
+from controllers.ai_stt_controller import stt_router
 from controllers.ai_tts_controller import tts_router
 from middleware import register_middleware
 from contextlib import asynccontextmanager
@@ -47,7 +48,7 @@ app.include_router(tool_router, prefix=f"/api/{version}/tools", tags=["tools"])
 app.include_router(api_purchase_quota_router, prefix=f"/api/{version}/purchase-quota", tags=["purchase-quota"])
 app.include_router(api_usage_router, prefix=f"/api/{version}/usage", tags=["usage"])
 app.include_router(tts_router, prefix=f"/api/{version}/tts", tags=["tts"])
-
+app.include_router(stt_router, prefix=f"/api/{version}/stt", tags=["stt"])
 
 
 # class QueryRequest(BaseModel):
