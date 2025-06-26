@@ -2,12 +2,11 @@ import os
 from elevenlabs.client import ElevenLabs
 from fastapi import HTTPException, UploadFile
 from io import BytesIO
-
-ELEVENLABS_API_KEY = "sk_a9a4076d830b6a0330d9b19042f1e52089d83bcef77f275c"
+from config import settings
 
 class STTDAL:
     async def speech_to_text(self, audio_file: UploadFile) -> str:
-        client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+        client = ElevenLabs(api_key=settings.elevenlabs_api_key)
         try:
             audio_data = BytesIO(await audio_file.read())
             transcription = client.speech_to_text.convert(

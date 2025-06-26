@@ -3,14 +3,16 @@ from elevenlabs.client import ElevenLabs
 from elevenlabs import VoiceSettings
 from schemas.tts_schemas import TTSRequest
 from fastapi import HTTPException
+from config import settings
 
-# Use environment variable for API key
-ELEVENLABS_API_KEY = "sk_a9a4076d830b6a0330d9b19042f1e52089d83bcef77f275c"
 
-# Default values (should match controller)
-DEFAULT_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"
-DEFAULT_MODEL_ID = "eleven_flash_v2_5"
-DEFAULT_OUTPUT_FORMAT = "mp3_44100_128"
+
+
+# Use environment variable for API key and TTS defaults from settings
+ELEVENLABS_API_KEY = settings.elevenlabs_api_key
+DEFAULT_VOICE_ID = settings.default_voice_id
+DEFAULT_MODEL_ID = settings.default_model_id
+DEFAULT_OUTPUT_FORMAT = settings.default_output_format
 
 class TTSDAL:
     async def text_to_speech(self, tts_request: TTSRequest) -> bytes:
@@ -20,11 +22,11 @@ class TTSDAL:
         return await loop.run_in_executor(None, self._sync_text_to_speech, tts_request)
 
     def _sync_text_to_speech(self, tts_request: TTSRequest) -> bytes:
-        client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+        client = ElevenLabs(api_key=settings.elevenlabs_api_key)
         text_input = tts_request.text
-        voice_id = DEFAULT_VOICE_ID
-        model_id = DEFAULT_MODEL_ID
-        output_format = DEFAULT_OUTPUT_FORMAT
+        voice_id = settings.default_voice_id
+        model_id = settings.default_model_id
+        output_format = settings.default_output_format
         # Optional: tune voice settings
         voice_settings = VoiceSettings(
             stability=0.5,

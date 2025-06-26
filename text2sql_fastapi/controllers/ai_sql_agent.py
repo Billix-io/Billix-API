@@ -16,6 +16,9 @@ from DAL_files.stt_dal import STTDAL
 from DAL_files.tts_dal import TTSDAL
 from schemas.tts_schemas import TTSRequest, TTSResponse
 import base64
+from dependencies import get_current_user, payment_required
+from schemas.user_schemas import UserBase
+from schemas.api_usage_schemas import ApiUsageCreate, ApiUsageUpdate, ApiUsageResponse
 
 load_dotenv()
 query_router = APIRouter()
@@ -23,8 +26,9 @@ stt_service = STTDAL()
 tts_service = TTSDAL()
 
 class QueryRequest(BaseModel):
-    db_url: str = "mysql+pymysql://sales_user:1234@5.189.160.119:3306/SALES_AI"
-    prompt: str = "give me the prompt template of closing interaction mode"
+    db_url: str = "postgresql://user:pass@host:5432/db"
+    prompt: str = "What were the top 3 selling products last month?"
+
 
 def clean_sql(sql: str) -> str:
     # Remove both ```sql and ``` (optionally surrounded by whitespace)
@@ -32,7 +36,7 @@ def clean_sql(sql: str) -> str:
     return sql.strip()
 
 @query_router.post("/chat")
-async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session)):
+async def query_db(request: QueryRequest, current_user: UserBase = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     try:
         # 1. Load all tools
         stmt = select(Tool)
@@ -46,7 +50,7 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
         agent = Agent(model=model)
         
         # 2. Fetch database schema
-        sql_tools = SQLTools(db_url=request.db_url)
+        sql_tools = SQLTools(db_url=request.db_url) 
         table_names = json.loads(sql_tools.list_tables())
         schema = {}
         for table in table_names:
@@ -131,12 +135,41 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
                 raise HTTPException(status_code=500, detail="Generated SQL query is not a string")
                 
             query_result = sql_tools.run_sql_query(sql_query)
+            # Refine the answer using LLM
+            refine_prompt = (
+                f"User Query: {request.prompt}\n"
+                f"SQL Query: {sql_query}\n"
+                f"Raw SQL Result: {query_result}\n"
+                "\nPlease provide a clear, user-friendly answer to the user's query based on the SQL result above."
+            )
+            refine_response = agent.run(refine_prompt)
+            refined_answer = refine_response.content.strip() if refine_response and refine_response.content else None
+            refine_token_usage = getattr(refine_response, "response_usage", None) or getattr(refine_response, "usage", None)
+            # Sum token usage if available
+            total_token_usage = 0
+            if token_usage and isinstance(token_usage, dict) and "total_tokens" in token_usage:
+                total_token_usage += token_usage["total_tokens"]
+            if refine_token_usage and isinstance(refine_token_usage, dict) and "total_tokens" in refine_token_usage:
+                total_token_usage += refine_token_usage["total_tokens"]
+            # Log API usage
+            usage_create = ApiUsageCreate(
+                api_name="llm_query",
+                endpoint="/api/v1/query/chat",
+                units_used=total_token_usage,
+                cost_usd=0,  # You can add cost calculation logic if needed
+                api_key_used="N/A",
+                status="success"
+            )
+            await api_usage_service.create_usage_with_user_id(usage_create, current_user.user_id, db)
             return {
                 "used_tool": llm_json["used_tool"],
                 "sql_query": sql_query,
                 "result": json.loads(query_result) if query_result.startswith("[") else query_result,
                 "params": llm_json.get("params"),
-                "token_usage": token_usage
+                "token_usage": token_usage,
+                "refine_token_usage": refine_token_usage,
+                "total_token_usage": total_token_usage,
+                "refined_answer": refined_answer
             }
         else:
             # Fallback: Use LLM to generate SQL as before
@@ -172,14 +205,44 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
             print("cleaned_query :",cleaned_query)
     
             query_result = sql_tools.run_sql_query(cleaned_query)
+            # Refine the answer using LLM
+            refine_prompt = (
+                f"User Query: {request.prompt}\n"
+                f"SQL Query: {cleaned_query}\n"
+                f"Raw SQL Result: {query_result}\n"
+                "\nPlease provide a clear, user-friendly answer to the user's query based on the SQL result above."
+            )
+            refine_response = agent.run(refine_prompt)
+            refined_answer = refine_response.content.strip() if refine_response and refine_response.content else None
+            refine_token_usage = getattr(refine_response, "response_usage", None) or getattr(refine_response, "usage", None)
+            # Sum token usage if available
+            total_token_usage = 0
+            if token_usage and isinstance(token_usage, dict) and "total_tokens" in token_usage:
+                total_token_usage += token_usage["total_tokens"]
+            if refine_token_usage and isinstance(refine_token_usage, dict) and "total_tokens" in refine_token_usage:
+                total_token_usage += refine_token_usage["total_tokens"]
+            # Log API usage
+            usage_create = ApiUsageCreate(
+                api_name="llm_query",
+                endpoint="/api/v1/query/chat",
+                units_used=total_token_usage,
+                cost_usd=0,  # You can add cost calculation logic if needed
+                api_key_used="N/A",
+                status="success"
+            )
+            await api_usage_service.create_usage_with_user_id(usage_create, current_user.user_id, db)
             return {
                 "used_tool": None,
                 "sql_query": cleaned_query,
                 "result": json.loads(query_result) if query_result.startswith("[") else query_result,
-                "token_usage": token_usage
+                "token_usage": token_usage,
+                "refine_token_usage": refine_token_usage,
+                "total_token_usage": total_token_usage,
+                "refined_answer": refined_answer
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @query_router.post("/audio-chat")
 async def audio_chat(

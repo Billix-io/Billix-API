@@ -31,9 +31,13 @@ class Settings(BaseSettings):
     upstash_redis_rest_token: str
 
     gemini_api_key:str
+    elevenlabs_api_key:str
 
+    # TTS Defaults
+    default_voice_id: str 
+    default_model_id: str 
+    default_output_format: str 
 
-  
     class Config:
         env_file = DOTENV  
         env_file_encoding = 'utf-8'

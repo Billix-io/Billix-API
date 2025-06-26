@@ -112,3 +112,10 @@ Desktop.ini
 
 # FastAPI/Swagger
 swagger.yaml 
+
+models/__pycache__/
+DAL_files/__pycache__/
+controllers/__pycache__/
+dependencies/__pycache__/
+schemas/__pycache__/
+__pycache__/

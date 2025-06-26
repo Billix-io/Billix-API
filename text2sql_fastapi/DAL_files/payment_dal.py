@@ -4,6 +4,8 @@ from typing import Optional, List
 from models.payment import Payment
 from schemas.payment_schemas import PaymentCreate, PaymentUpdate
 import uuid
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 class PaymentDAL:
     def __init__(self, db_session: Session):
@@ -65,4 +67,16 @@ class PaymentDAL:
         
         self.db_session.delete(db_payment)
         self.db_session.commit()
-        return True 
+        return True
+
+    @staticmethod
+    async def user_has_successful_payment(user_id: uuid.UUID, db_session: AsyncSession) -> bool:
+        from models.payment import PaymentStatus
+        result = await db_session.execute(
+            select(Payment).where(
+                Payment.user_id == user_id,
+                Payment.status == PaymentStatus.SUCCEEDED
+            )
+        )
+        payment = result.scalar_one_or_none()
+        return payment is not None 

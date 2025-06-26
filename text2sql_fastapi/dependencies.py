@@ -10,6 +10,7 @@ from DAL_files.roles_dal import RoleDAL
 from typing import List, Any
 from schemas.user_schemas import UserBase
 from redis_store import token_in_blocklist
+from DAL_files.payment_dal import PaymentDAL
 
 user_service=UserDAL()
 role_service=RoleDAL()
@@ -103,3 +104,14 @@ class RoleChecker:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have the required role to access this resource."
         )
+
+async def payment_required(current_user: UserBase = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    from uuid import UUID
+    # Get the user's UUID (need to fetch full user object for user_id)
+    user = await user_service.get_user_by_email(current_user.email, session)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    has_payment = await PaymentDAL.user_has_successful_payment(user.user_id, session)
+    if not has_payment:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="API access requires a successful payment.")
+    return True
