@@ -31,6 +31,7 @@ distro
 dnspython
 docstring_parser
 email_validator
+elevenlabs
 fastapi
 fastapi-mail
 frozenlist
