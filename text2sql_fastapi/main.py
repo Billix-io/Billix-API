@@ -23,6 +23,7 @@ from contextlib import asynccontextmanager
 from database import init_db
 import yaml
 from controllers.user_subscription_controller import user_subscription_router
+from controllers.invoice_controller import invoice_router
 
 load_dotenv()
 
@@ -109,6 +110,7 @@ app.include_router(stt_router, prefix=f"/api/{version}/stt", tags=["stt"])
 app.include_router(user_subscription_router, prefix=f"/api/{version}/subscriptions", tags=["user subscriptions"])
 app.include_router(users_api_key_router, prefix=f"/api/{version}/api-keys", tags=["api-keys"])
 app.include_router(plan_router, prefix=f"/api/{version}/plans", tags=["plans"])
+app.include_router(invoice_router,prefix=f"/api/{version}/invoice", tags=["invoices"])
 
 # class QueryRequest(BaseModel):
 #     db_url: str

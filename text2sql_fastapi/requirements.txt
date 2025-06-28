@@ -115,3 +115,6 @@ websockets
 yarl
 zope.interface
 zstandard
+PyMuPDF
+Pillow
+llama-cloud-services
