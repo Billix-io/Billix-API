@@ -18,4 +18,4 @@ class ApiUsage(Base):
     status_active = Column(Boolean, nullable=False, server_default=text('true'))
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
-    user = relationship("User", back_populates="api_usages") 
+    user = relationship("User", back_populates="api_usages")

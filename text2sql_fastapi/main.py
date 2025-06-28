@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.security import HTTPBearer
+from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 from agno.agent import Agent
 from agno.models.google import Gemini
@@ -14,10 +16,13 @@ from controllers.api_purchase_quota_controller import api_purchase_quota_router
 from controllers.api_usage_controller import api_usage_router
 from controllers.ai_stt_controller import stt_router
 from controllers.ai_tts_controller import tts_router
+from controllers.users_api_key_controller import users_api_key_router
+from controllers.plan_controller import plan_router
 from middleware import register_middleware
 from contextlib import asynccontextmanager
 from database import init_db
 import yaml
+from controllers.user_subscription_controller import user_subscription_router
 
 load_dotenv()
 
@@ -32,9 +37,61 @@ async def life_span(app:FastAPI):
 
 app = FastAPI(
     title="Text to SQL API",
-
-    lifespan=life_span
+    description="API for converting natural language to SQL queries with token-based access control",
+    version="1.0.0",
+    lifespan=life_span,
+    openapi_tags=[
+        {"name": "query", "description": "SQL query generation endpoints"},
+        {"name": "users", "description": "User authentication and management"},
+        {"name": "payments", "description": "Payment processing"},
+        {"name": "tools", "description": "SQL tools management"},
+        {"name": "api-keys", "description": "API key management"},
+        {"name": "plans", "description": "Subscription plans"},
+        {"name": "user subscriptions", "description": "User subscription management"},
+        {"name": "tts", "description": "Text-to-Speech services"},
+        {"name": "stt", "description": "Speech-to-Text services"},
+        {"name": "usage", "description": "API usage tracking"},
+        {"name": "purchase-quota", "description": "API quota management"},
+        {"name": "roles", "description": "User roles and permissions"},
+    ]
 )
+
+# Add API Key security scheme
+app.openapi_schema = None
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    
+    # Add API Key security scheme
+    openapi_schema["components"]["securitySchemes"] = {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "API key for authentication. Add your API key to access protected endpoints."
+        }
+    }
+    
+    # Add security requirement to protected endpoints
+    for path in openapi_schema["paths"]:
+        if path.startswith("/api/v1/query"):
+            for method in openapi_schema["paths"][path]:
+                if method in ["post", "get", "put", "delete"]:
+                    if "security" not in openapi_schema["paths"][path][method]:
+                        openapi_schema["paths"][path][method]["security"] = [{"ApiKeyAuth": []}]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 register_middleware(app)
 
@@ -49,7 +106,9 @@ app.include_router(api_purchase_quota_router, prefix=f"/api/{version}/purchase-q
 app.include_router(api_usage_router, prefix=f"/api/{version}/usage", tags=["usage"])
 app.include_router(tts_router, prefix=f"/api/{version}/tts", tags=["tts"])
 app.include_router(stt_router, prefix=f"/api/{version}/stt", tags=["stt"])
-
+app.include_router(user_subscription_router, prefix=f"/api/{version}/subscriptions", tags=["user subscriptions"])
+app.include_router(users_api_key_router, prefix=f"/api/{version}/api-keys", tags=["api-keys"])
+app.include_router(plan_router, prefix=f"/api/{version}/plans", tags=["plans"])
 
 # class QueryRequest(BaseModel):
 #     db_url: str

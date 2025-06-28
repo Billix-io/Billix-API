@@ -26,6 +26,10 @@ async def init_db():
     from models.roles import Role
     from models.api_usage import ApiUsage
     from models.api_purchase_quota import ApiPurchaseQuota
+    from models.plan import Plan
+    from models.user_subscription import UserSubscription
+    from models.users_api_key import UsersApiKey
+    
  
 
     # ...import other models here

@@ -47,3 +47,5 @@ class ApiUsageDAL:
         await db_session.commit()
         await db_session.refresh(db_usage)
         return db_usage 
+
+    

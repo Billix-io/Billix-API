@@ -1,23 +1,33 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 import os
-from typing import Optional
 
-DOTENV = os.path.join(os.path.dirname(__file__), ".env")
+# ✅ Load .env manually before instantiating the Settings
+DOTENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(DOTENV_PATH)
+
 class Settings(BaseSettings):
     # Database Configuration
     database_hostname: str 
     database_password: str 
-    database_name:str
-    database_username:str
-    database_port:str
-    jwt_secret:str
-    jwt_algorithm:str
-    redis_host:str
-    redis_port:str
-    redis_password:str
-    google_client_id:str
-    google_client_secret:str
+    database_name: str
+    database_username: str
+    database_port: str
+
+    # JWT Configuration
+    jwt_secret: str
+    jwt_algorithm: str
+
+    # Redis Configuration
+    redis_host: str
+    redis_port: str
+    redis_password: str
+
+    # Google OAuth Configuration
+    google_client_id: str
+    google_client_secret: str
+
+    # Mail Configuration
     mail_username: str
     mail_password: str
     mail_from: str
@@ -25,22 +35,19 @@ class Settings(BaseSettings):
     mail_server: str
     mail_from_name: str
 
-    # Groq API Configuration
+    # API Keys and Services
     groq_api_key: str
     upstash_redis_rest_url: str
     upstash_redis_rest_token: str
+    gemini_api_key: str
+    elevenlabs_api_key: str
 
-    gemini_api_key:str
-    elevenlabs_api_key:str
+    # Defaults (optional)
+    default_voice_id: str = "EXAVITQu4vr4xnSDxMaL"
+    default_model_id: str = "eleven_flash_v2_5"
+    default_output_format: str = "mp3_44100_128"
 
-    # TTS Defaults
-    default_voice_id: str 
-    default_model_id: str 
-    default_output_format: str 
+    model_config = SettingsConfigDict(env_file=DOTENV_PATH, extra="allow")
 
-    class Config:
-        env_file = DOTENV  
-        env_file_encoding = 'utf-8'
-        
-    
-settings=Settings()
+# Instantiate the settings
+settings = Settings()

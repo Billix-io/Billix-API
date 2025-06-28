@@ -29,7 +29,8 @@ class User(Base):
     role = relationship("Role", back_populates="users", lazy="selectin")
     payments = relationship("Payment", back_populates="user")
     api_usages = relationship("ApiUsage", back_populates="user")
-
+    subscription = relationship("UserSubscription", back_populates="user", uselist=False)
+    api_keys = relationship("UsersApiKey", back_populates="user")
 
     # Constraints
     __table_args__ = (
