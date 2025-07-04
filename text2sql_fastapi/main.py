@@ -45,7 +45,7 @@ async def life_span(app:FastAPI):
     print("server has been stopped")
 
 app = FastAPI(
-    title="Text to SQL API",
+    title="Billix API as a Service Collection",
     description="API for converting natural language to SQL queries with token-based access control",
     version="1.0.0",
     lifespan=life_span,
