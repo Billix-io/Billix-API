@@ -16,8 +16,10 @@ from models.enums import RoleEnum
 
 from pydantic import BaseModel, EmailStr
 
-
-
+"""
+User authentication and management endpoints for the FastAPI application.
+Includes registration, login, Google OAuth, OTP, password reset, and user CRUD operations.
+"""
 
 auth_router = APIRouter()
 user_service = UserDAL()
@@ -28,22 +30,37 @@ role_checker = Depends(RoleChecker([RoleEnum.admin, RoleEnum.super_admin]))
 REFRESH_TOKEN_EXPIRY = 2 
 
 class SendOtpRequest(BaseModel):
+    """
+    Request schema for sending OTP to a user's email.
+    """
     email: EmailStr
 
 class VerifyOtpRequest(BaseModel):
+    """
+    Request schema for verifying OTP sent to a user's email.
+    """
     email: EmailStr
     otp_code: str
 
 class PasswordResetRequest(BaseModel):
+    """
+    Request schema for initiating a password reset via email.
+    """
     email: EmailStr
 
 class PasswordResetConfirm(BaseModel):
+    """
+    Request schema for confirming password reset with OTP and new password.
+    """
     email: EmailStr
     otp_code: str
     new_password: str
 
 @auth_router.get("/all-users", response_model=list[UserResponse], dependencies=[role_checker])
 async def get_all_users(session: AsyncSession = Depends(get_session)):
+    """
+    Retrieve all users. Requires admin or super_admin role.
+    """
     users = await user_service.get_all_users(session)
     if not users:
         raise HTTPException(status_code=404, detail="No users found")
@@ -51,6 +68,9 @@ async def get_all_users(session: AsyncSession = Depends(get_session)):
 
 @auth_router.post("/google")
 async def google_login(google_data: GoogleAuthModel, session: AsyncSession = Depends(get_session)):
+    """
+    Authenticate or register a user using Google OAuth and return tokens.
+    """
     # 1. Verify the Google ID token and extract user info
     user_info = await user_service.verify_google_token(google_data.id_token)
     if not user_info:
@@ -114,6 +134,9 @@ async def google_login(google_data: GoogleAuthModel, session: AsyncSession = Dep
 
 @auth_router.post("/sign-up", status_code=status.HTTP_201_CREATED)
 async def create_user(user: UserCreate,session: AsyncSession = Depends(get_session)):
+    """
+    Register a new user, send OTP, and return access token.
+    """
     #check user Role exists
     role=await role_serivce.get_role_by_name("user",session)
     if not role:
@@ -156,6 +179,9 @@ async def create_user(user: UserCreate,session: AsyncSession = Depends(get_sessi
 
 @auth_router.get("/logout")
 async def logout_users(token_details: str = Depends(AccessTokenBearer())):
+    """
+    Logout the user by blacklisting the current JWT token.
+    """
     jti = token_details["jti"]
     # Add the JTI to the blocklist with an expiry time
     await add_jti_to_blocklist(jti)
@@ -164,6 +190,9 @@ async def logout_users(token_details: str = Depends(AccessTokenBearer())):
     
 @auth_router.get("/me", response_model=UserResponse)
 async def get_current_user(current_user: UserBase = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    """
+    Get the current authenticated user's details.
+    """
     user_id = current_user.user_id
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authenticated")
@@ -172,6 +201,9 @@ async def get_current_user(current_user: UserBase = Depends(get_current_user), s
 
 @auth_router.post("/sign-in")
 async def login_users(login_data: UserLogin, session: AsyncSession = Depends(get_session)):
+    """
+    Authenticate a user with email and password, returning access (and optionally refresh) tokens.
+    """
     email = login_data.email
     password = login_data.password
     user = await user_service.get_user_by_email(email, session)

@@ -6,6 +6,7 @@ import uuid
 from sqlalchemy.sql import func
 
 class User(Base):
+
     __tablename__ = 'users'
 
     user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
@@ -18,7 +19,6 @@ class User(Base):
     first_name = Column(String(50), nullable=False)
     last_name = Column(String(50), nullable=False)
     role_id = Column(UUID(as_uuid=True), ForeignKey('roles.role_id'), nullable=True)
-
     status_active = Column(Boolean, nullable=False, server_default=text('true'))
     is_verified = Column(Boolean, nullable=False, server_default=text('false'))
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())

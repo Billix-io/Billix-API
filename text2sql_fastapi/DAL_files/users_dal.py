@@ -1,4 +1,7 @@
-
+"""
+Data Access Layer for user-related database operations.
+Handles user creation, retrieval, update, deletion, OTP, and Google OAuth verification.
+"""
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from uuid import UUID
@@ -22,9 +25,14 @@ roles_services = RoleDAL()
 logger = logging.getLogger(__name__)
 
 class UserDAL:
+    """
+    Data Access Layer for user-related operations, including CRUD, OTP, and Google OAuth.
+    """
 
-  
     async def create_user(self, user_data: UserCreate, db_session: AsyncSession) -> User:
+        """
+        Create a new user in the database, hashing the password if provided and assigning the default role.
+        """
         # Convert the Pydantic model to a dictionary
         user_data_dict = user_data.model_dump()
 
@@ -67,9 +75,15 @@ class UserDAL:
         return new_user
 
     async def get_user_by_id(self, user_id: str,db_session: AsyncSession) -> User:
+        """
+        Retrieve a user by their unique user ID.
+        """
         return await db_session.get(User, user_id)
 
     async def get_user_by_email(self, email: str,db_session: AsyncSession) -> User:
+        """
+        Retrieve a user by their email address.
+        """
         result = await db_session.execute(
             select(User).where(User.email == email)
         )
@@ -79,6 +93,9 @@ class UserDAL:
         
 
     async def update_user(self, user_id: str, user_data: UserUpdate, db_session: AsyncSession) -> User:
+        """
+        Update user fields with provided data for the given user ID.
+        """
         user = await self.get_user_by_id(user_id, db_session)
         if not user:
             return None
@@ -89,6 +106,9 @@ class UserDAL:
         return user
 
     async def delete_user(self, user_id: str,db_session: AsyncSession) -> bool:
+        """
+        Delete a user by their user ID. Returns True if deleted, False if not found.
+        """
         user = await self.get_user_by_id(user_id, db_session)
         if not user:
             return False
@@ -98,7 +118,9 @@ class UserDAL:
         return True
     
     async def change_user_role(self, user_id: str, new_role_id: str, db_session: AsyncSession) -> User:
-
+        """
+        Change the role of a user to a new role ID.
+        """
         # Fetch the user by ID
         user = await self.get_user_by_id(user_id, db_session)
         if not user:
@@ -123,11 +145,13 @@ class UserDAL:
         return user
     
     async def get_all_users(self, db_session: AsyncSession) -> list[User]:
-
-            # Query all users from the database
-            result = await db_session.execute(select(User))
-            users = result.scalars().all()
-            return users
+        """
+        Retrieve all users from the database.
+        """
+        # Query all users from the database
+        result = await db_session.execute(select(User))
+        users = result.scalars().all()
+        return users
     
     async def verify_google_token(self,id_token: str):
         """
@@ -161,6 +185,9 @@ class UserDAL:
             return None
 
     async def save_otp(self, email: str, otp_code: str, expiry_minutes: int, db_session: AsyncSession):
+        """
+        Save an OTP code and expiry time for a user identified by email.
+        """
         user = await self.get_user_by_email(email, db_session)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -171,6 +198,9 @@ class UserDAL:
         return user
 
     async def verify_otp(self, email: str, otp_code: str, db_session: AsyncSession):
+        """
+        Verify the OTP code for a user and mark them as verified if correct and not expired.
+        """
         user = await self.get_user_by_email(email, db_session)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -186,6 +216,9 @@ class UserDAL:
         return user
 
     async def send_otp_via_email(self, email: str, otp_code: str):
+        """
+        Send an OTP code to the user's email address. (Stub for real email logic.)
+        """
         # Placeholder for sending email. Replace with real email logic.
         print(f"Sending OTP {otp_code} to {email}")
         # Example using smtplib (configure as needed):

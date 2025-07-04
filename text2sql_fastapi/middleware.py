@@ -11,6 +11,9 @@ logger.disabled = True
 
 
 def register_middleware(app: FastAPI):
+    """
+    Register CORS, trusted host, and custom logging middleware to the FastAPI app.
+    """
 
     @app.middleware("http")
     async def custom_logging(request: Request, call_next):

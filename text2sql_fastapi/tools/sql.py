@@ -13,7 +13,15 @@ except ImportError:
     raise ImportError("`sqlalchemy` not installed")
 
 
+"""
+Toolkit for SQL database operations, including listing tables, describing tables, and running queries.
+Used for text-to-SQL conversion and database schema inspection.
+"""
+
 class SQLTools(Toolkit):
+    """
+    Toolkit for interacting with SQL databases: list tables, describe tables, and run SQL queries.
+    """
     def __init__(
         self,
         db_url: Optional[str] = None,

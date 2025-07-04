@@ -5,10 +5,20 @@ from DAL_files.invoice_dal import SimpleInvoiceExtractor
 from schemas.invoice_schemas import InvoiceTextRequest
 import tempfile
 import re
+from config import settings
+
+
+from dotenv import load_dotenv
+load_dotenv()
 
 
 invoice_router = APIRouter()
-invoice_extractor = SimpleInvoiceExtractor(groq_api_key="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")
+api_key = settings.groq_api_key
+invoice_extractor = SimpleInvoiceExtractor(groq_api_key=api_key)
+
+"""
+Invoice extraction endpoints for classifying documents and extracting invoice data from text, PDF, or images.
+"""
 
 @invoice_router.post("/extract/invoice")
 def extract_invoice(request: InvoiceTextRequest):
@@ -23,46 +33,7 @@ def extract_invoice(request: InvoiceTextRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# @invoice_router.post("/extract/pdf-text")
-# async def extract_pdf_text(file: UploadFile = File(...)):
-#     """
-#     Extract text from a PDF file using LlamaParse.
-#     """
-#     try:
-#         api_key = "llx-npVcby1qgzg1xKfvNJaWfprYXYb0YLK0OdDwpWJyYVg0OU8Y"
-#         parsingInstructionSpaceContent = None  # Set your parsing instructions here if needed
 
-#         # Save the uploaded file to a temporary location
-#         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-#             contents = await file.read()
-#             temp_file.write(contents)
-#             temp_file.flush()
-#             temp_path = temp_file.name
-
-#         # Create an instance of LlamaParse with the API key, result_type as "markdown", and parsing instructions
-#         withSpaceContent = LlamaParse(
-#             result_type="text",
-#             api_key=api_key,
-#             fast_mode=True
-#         )
-
-#         # Load and parse the document
-#         parsed_content = withSpaceContent.load_data(temp_path)
-
-#         text = "\n".join(
-#             "\n".join(
-#                 re.sub(r'\s+', ' ', line).strip()
-#                 for line in doc.text.splitlines()
-#             )
-#             for doc in parsed_content
-#         )
-
-#         # Clean up the temp file
-#         os.remove(temp_path)
-
-#         return {"text": text}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
 
 @invoice_router.post("/extract/pdf-image-text")
 async def extract_pdf_image_text(file: UploadFile = File(...)):

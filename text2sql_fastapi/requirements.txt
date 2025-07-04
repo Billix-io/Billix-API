@@ -118,3 +118,5 @@ zstandard
 PyMuPDF
 Pillow
 llama-cloud-services
+fastapi-mail
+

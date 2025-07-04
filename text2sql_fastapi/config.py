@@ -2,11 +2,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 import os
 
+"""
+Configuration module for environment variables and application settings using Pydantic.
+Loads .env file and provides a Settings class for global config access.
+"""
+
 # ✅ Load .env manually before instantiating the Settings
 DOTENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(DOTENV_PATH)
 
 class Settings(BaseSettings):
+    """
+    Application settings loaded from environment variables using Pydantic BaseSettings.
+    """
     # Database Configuration
     database_hostname: str 
     database_password: str 

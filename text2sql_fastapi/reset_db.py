@@ -2,8 +2,15 @@ import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 from config import settings
 
+"""
+Utility script to drop and recreate the database, then initialize schema.
+Use for development or testing to reset the database state.
+"""
+
 async def reset_database():
-    """Drop and recreate the database"""
+    """
+    Drop and recreate the database, then initialize schema and tables.
+    """
     # Create engine without database name to connect to postgres
     postgres_url = (
         f"postgresql+asyncpg://{settings.database_username}:{settings.database_password}"

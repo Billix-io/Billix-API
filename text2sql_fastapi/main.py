@@ -1,3 +1,7 @@
+"""
+Main entry point for the Text to SQL FastAPI application.
+Initializes the FastAPI app, sets up routers, middleware, and custom OpenAPI schema.
+"""
 from fastapi import FastAPI, HTTPException
 from fastapi.security import HTTPBearer
 from fastapi.openapi.utils import get_openapi
@@ -24,6 +28,7 @@ from database import init_db
 import yaml
 from controllers.user_subscription_controller import user_subscription_router
 from controllers.invoice_controller import invoice_router
+from controllers.help_and_support_controller import help_support_router
 
 load_dotenv()
 
@@ -31,6 +36,9 @@ load_dotenv()
 # Base.metadata.create_all(bind=engine)
 @asynccontextmanager
 async def life_span(app:FastAPI):
+    """
+    Application lifespan event handler. Initializes the database on startup.
+    """
     print("server starting...")
     await init_db()
     yield
@@ -61,6 +69,9 @@ app = FastAPI(
 app.openapi_schema = None
 
 def custom_openapi():
+    """
+    Customizes the OpenAPI schema to add API Key security scheme and security requirements for protected endpoints.
+    """
     if app.openapi_schema:
         return app.openapi_schema
     
@@ -105,33 +116,10 @@ app.include_router(query_router, prefix=f"/api/{version}/query", tags=["query"])
 app.include_router(tool_router, prefix=f"/api/{version}/tools", tags=["tools"])
 app.include_router(api_purchase_quota_router, prefix=f"/api/{version}/purchase-quota", tags=["purchase-quota"])
 app.include_router(api_usage_router, prefix=f"/api/{version}/usage", tags=["usage"])
-app.include_router(tts_router, prefix=f"/api/{version}/tts", tags=["tts"])
-app.include_router(stt_router, prefix=f"/api/{version}/stt", tags=["stt"])
 app.include_router(user_subscription_router, prefix=f"/api/{version}/subscriptions", tags=["user subscriptions"])
 app.include_router(users_api_key_router, prefix=f"/api/{version}/api-keys", tags=["api-keys"])
 app.include_router(plan_router, prefix=f"/api/{version}/plans", tags=["plans"])
 app.include_router(invoice_router,prefix=f"/api/{version}/invoice", tags=["invoices"])
-
-# class QueryRequest(BaseModel):
-#     db_url: str
-#     query: str
+app.include_router(help_support_router,prefix=f"/api/{version}/help-support", tags=["Help and Support"])
 
 
-
-# Load Swagger YAML - using correct file path
-# swagger_file_path = os.path.join(os.path.dirname(__file__), "swagger.yaml")
-# try:
-#     with open(swagger_file_path, "r") as file:
-#         swagger_yaml = yaml.safe_load(file)
-        
-#     # Custom OpenAPI schema
-#     def custom_openapi():
-#         if app.openapi_schema:
-#             return app.openapi_schema
-#         app.openapi_schema = swagger_yaml
-#         return app.openapi_schema
-
-#     app.openapi = custom_openapi
-#     print(f"Swagger documentation loaded from {swagger_file_path}")
-# except Exception as e:
-#     print(f"Error loading Swagger YAML: {e}")

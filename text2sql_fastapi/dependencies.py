@@ -19,10 +19,16 @@ user_service=UserDAL()
 role_service=RoleDAL()
 
 class TokenBearer(HTTPBearer):
+    """
+    Custom HTTPBearer for validating JWT tokens and checking blocklist status.
+    """
     def __init__(self, auto_error=True):
         super().__init__(auto_error=auto_error)
 
     async def __call__(self, request: Request) -> [HTTPAuthorizationCredentials, None]:
+        """
+        Validate the JWT token, check blocklist, and return token data if valid.
+        """
         creds = await super().__call__(request)    
 
         token= creds.credentials
@@ -45,33 +51,52 @@ class TokenBearer(HTTPBearer):
         return token_data
     
     def token_valid(self,token:str)->bool:
+        """
+        Check if the provided token is valid and decodable.
+        """
         token_data=decode_token(token)
         return token_data is not None 
     
     def verify_token_data(self,token_data):
-         raise NotImplementedError("please Override this method in chile class")
+        """
+        Abstract method to be overridden for custom token data validation.
+        """
+        raise NotImplementedError("please Override this method in chile class")
     
 class AccessTokenBearer(TokenBearer):
-     def verify_token_data(self,token_data:dict)->None:
-          
-            if token_data and token_data["refresh"]:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="provide an access token"
-                    )
+    """
+    TokenBearer subclass for validating access tokens (not refresh tokens).
+    """
+    def verify_token_data(self,token_data:dict)->None:
+        """
+        Ensure the token is an access token (not a refresh token).
+        """
+        if token_data and token_data["refresh"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="provide an access token"
+            )
 class RefreshTokenBearer(TokenBearer):
-     def verify_token_data(self,token_data:dict)->None:
-          
-            if token_data and not token_data["refresh"]:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="provide a Refresh token"
-                    )
+    """
+    TokenBearer subclass for validating refresh tokens (not access tokens).
+    """
+    def verify_token_data(self,token_data:dict)->None:
+        """
+        Ensure the token is a refresh token (not an access token).
+        """
+        if token_data and not token_data["refresh"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="provide a Refresh token"
+            )
 
 async def get_current_user(
     token_detail: dict = Depends(AccessTokenBearer()),
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Retrieve the current user from the database using token details.
+    """
     user_email = token_detail.get("user", {}).get("email")
     if not user_email:
         raise HTTPException(
@@ -93,7 +118,8 @@ async def api_key_auth(
     session: AsyncSession = Depends(get_session)
 ):
     """
-    Authenticate using API key and check token requirements
+    Authenticate using API key and check token requirements.
+    Returns user_id if valid, raises HTTPException otherwise.
     """
     if not x_api_key:
         raise HTTPException(
@@ -132,10 +158,16 @@ async def api_key_auth(
     return api_key_record.user_id
 
 class RoleChecker:
+    """
+    Dependency for checking if the current user has one of the allowed roles.
+    """
     def __init__(self, allowed_roles: List[str]) -> None:
         self.allowed_roles = allowed_roles
 
     async def __call__(self, current_user: UserBase = Depends(get_current_user), session: AsyncSession = Depends(get_session)) -> bool:
+        """
+        Check if the current user's role is in the allowed roles list.
+        """
         role = await role_service.get_role_by_id(current_user.role_id, session)
         if not role:
             raise HTTPException(
@@ -152,6 +184,9 @@ class RoleChecker:
         )
 
 async def payment_required(current_user: UserBase = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    """
+    Dependency to ensure the user has made a successful payment.
+    """
     from uuid import UUID
     # Get the user's UUID (need to fetch full user object for user_id)
     user = await user_service.get_user_by_email(current_user.email, session)
@@ -163,6 +198,9 @@ async def payment_required(current_user: UserBase = Depends(get_current_user), s
     return True
 
 async def subscription_token_required(current_user: UserBase = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    """
+    Dependency to ensure the user has at least 5000 tokens in their subscription.
+    """
     from uuid import UUID
     # Get the user's UUID (need to fetch full user object for user_id)
     user = await user_service.get_user_by_email(current_user.email, session)

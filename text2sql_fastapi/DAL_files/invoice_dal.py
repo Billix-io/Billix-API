@@ -6,8 +6,19 @@ from schemas.invoice_schemas import InvoiceData
 import fitz
 import base64
 
+"""
+Data Access Layer for invoice extraction using LLMs and document parsing.
+Handles classification, extraction from text, PDF, and images.
+"""
+
 class SimpleInvoiceExtractor:
+    """
+    Extracts invoice data from text, PDF, or images using LLMs and prompt templates.
+    """
     def __init__(self, groq_api_key: str):
+        """
+        Initialize the extractor with a Groq API key and set up prompt templates.
+        """
         self.model = ChatGroq(
             temperature=0.1,
             groq_api_key=groq_api_key,
@@ -176,68 +187,74 @@ Return JSON in this format (use source labels in `lineItems`):
         ])
 
     def classify_document(self, text: str) -> str:
-            lower_text = text.lower()
-            invoice_patterns = [
-                "invoice", "bill to", "factura", "rechnung", "facture", "fattura", "发票", "インボイス",
-                "فاتورة", "חשבונית", "счет", "tax invoice", "billing statement", "payment due",
-                "invoice number", "invoice no", "invoice #", "inv #", "inv no", "invoice date"
-            ]
-            receipt_patterns = [
-                "receipt", "payment received", "paid", "payment confirmation", "proof of payment",
-                "recibo", "quittung", "reçu", "ricevuta", "收据", "領収書", "إيصال", "קבלה", "квитанция",
-                "thank you for your purchase", "cash receipt", "payment receipt"
-            ]
-            po_patterns = [
-                "purchase order", "p.o.", "p/o", "order confirmation", "order form",
-                "orden de compra", "bestellung", "bon de commande", "ordine d'acquisto", "采购订单",
-                "注文書", "أمر شراء", "הזמנת רכש", "заказ на покупку"
-            ]
-            quote_patterns = [
-                "quote", "estimate", "quotation", "proposal", "pro forma", "proforma",
-                "presupuesto", "angebot", "devis", "preventivo", "报价", "見積もり",
-                "عرض أسعار", "הצעת מחיר", "коммерческое предложение"
-            ]
-            statement_patterns = [
-                "statement", "account statement", "statement of account", "monthly statement",
-                "estado de cuenta", "kontoauszug", "relevé de compte", "estratto conto", "对账单",
-                "取引明細書", "كشف حساب", "דף חשבון", "выписка по счету"
-            ]
-            creditNote_patterns = [
-                "credit note", "credit memo", "credit memorandum", "refund",
-                "nota de crédito", "gutschrift", "note de crédit", "nota di credito", "贷记通知单",
-                "クレジットノート", "إشعار دائن", "הודעת זיכוי", "кредитное авизо"
-            ]
-            for pattern in invoice_patterns:
-                if pattern in lower_text:
-                    return "invoice"
-            for pattern in receipt_patterns:
-                if pattern in lower_text:
-                    return "receipt"
-            for pattern in po_patterns:
-                if pattern in lower_text:
-                    return "purchase_order"
-            for pattern in quote_patterns:
-                if pattern in lower_text:
-                    return "quote"
-            for pattern in statement_patterns:
-                if pattern in lower_text:
-                    return "statement"
-            for pattern in creditNote_patterns:
-                if pattern in lower_text:
-                    return "credit_note"
-            if (
-                ("total" in lower_text and ("due" in lower_text or "amount" in lower_text)) or
-                ("payment" in lower_text and "terms" in lower_text) or
-                ("tax" in lower_text and "subtotal" in lower_text)
-            ):
+        """
+        Classify the document type (invoice, receipt, PO, etc.) based on text patterns.
+        """
+        lower_text = text.lower()
+        invoice_patterns = [
+            "invoice", "bill to", "factura", "rechnung", "facture", "fattura", "发票", "インボイス",
+            "فاتورة", "חשבונית", "счет", "tax invoice", "billing statement", "payment due",
+            "invoice number", "invoice no", "invoice #", "inv #", "inv no", "invoice date"
+        ]
+        receipt_patterns = [
+            "receipt", "payment received", "paid", "payment confirmation", "proof of payment",
+            "recibo", "quittung", "reçu", "ricevuta", "收据", "領収書", "إيصال", "קבלה", "квитанция",
+            "thank you for your purchase", "cash receipt", "payment receipt"
+        ]
+        po_patterns = [
+            "purchase order", "p.o.", "p/o", "order confirmation", "order form",
+            "orden de compra", "bestellung", "bon de commande", "ordine d'acquisto", "采购订单",
+            "注文書", "أمر شراء", "הזמנת רכש", "заказ на покупку"
+        ]
+        quote_patterns = [
+            "quote", "estimate", "quotation", "proposal", "pro forma", "proforma",
+            "presupuesto", "angebot", "devis", "preventivo", "报价", "見積もり",
+            "عرض أسعار", "הצעת מחיר", "коммерческое предложение"
+        ]
+        statement_patterns = [
+            "statement", "account statement", "statement of account", "monthly statement",
+            "estado de cuenta", "kontoauszug", "relevé de compte", "estratto conto", "对账单",
+            "取引明細書", "كشف حساب", "דף חשבון", "выписка по счету"
+        ]
+        creditNote_patterns = [
+            "credit note", "credit memo", "credit memorandum", "refund",
+            "nota de crédito", "gutschrift", "note de crédit", "nota di credito", "贷记通知单",
+            "クレジットノート", "إشعار دائن", "הודעת זיכוי", "кредитное авизо"
+        ]
+        for pattern in invoice_patterns:
+            if pattern in lower_text:
                 return "invoice"
-            import re
-            if re.search(r"inv[^a-z]", lower_text) and re.search(r"\d{4,}", lower_text):
-                return "invoice"
-            return "invoice"    
+        for pattern in receipt_patterns:
+            if pattern in lower_text:
+                return "receipt"
+        for pattern in po_patterns:
+            if pattern in lower_text:
+                return "purchase_order"
+        for pattern in quote_patterns:
+            if pattern in lower_text:
+                return "quote"
+        for pattern in statement_patterns:
+            if pattern in lower_text:
+                return "statement"
+        for pattern in creditNote_patterns:
+            if pattern in lower_text:
+                return "credit_note"
+        if (
+            ("total" in lower_text and ("due" in lower_text or "amount" in lower_text)) or
+            ("payment" in lower_text and "terms" in lower_text) or
+            ("tax" in lower_text and "subtotal" in lower_text)
+        ):
+            return "invoice"
+        import re
+        if re.search(r"inv[^a-z]", lower_text) and re.search(r"\d{4,}", lower_text):
+            return "invoice"
+        return "invoice"    
 
 
     def extract_invoice_fromate_from_text(self, text: str, doctype: str):
+        """
+        Extract structured invoice data from raw text using the LLM and prompt template.
+        """
         try:
             # Create processing chain with metadata capture
             chain = (
@@ -265,7 +282,9 @@ Return JSON in this format (use source labels in `lineItems`):
             raise
     
     def extract_from_pdf_bytes(self, pdf_bytes: bytes) -> InvoiceData:
-    
+        """
+        Extract invoice data from PDF bytes using OCR and LLM extraction.
+        """
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         if doc.page_count == 0:
             raise ValueError("No pages found in PDF")
@@ -276,6 +295,9 @@ Return JSON in this format (use source labels in `lineItems`):
         return self.extract_from_base64_image(base64_image)
 
     def extract_from_base64_image(self, base64_image: str) -> InvoiceData:
+        """
+        Extract invoice data from a base64-encoded image using OCR and LLM extraction.
+        """
         try:
             str_parser = StrOutputParser()
             chain = (

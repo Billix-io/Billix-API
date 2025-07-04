@@ -19,6 +19,9 @@ async_engine: AsyncEngine = create_async_engine(
 
 # Initialize the DB
 async def init_db():
+    """
+    Initializes the database by creating all tables defined in the models.
+    """
     print("⏳ Initializing DB...")
     from models.users import User
     from models.payment import Payment
@@ -29,6 +32,7 @@ async def init_db():
     from models.plan import Plan
     from models.user_subscription import UserSubscription
     from models.users_api_key import UsersApiKey
+    from models.help_and_support import HelpAndSupport
     
  
 
@@ -41,6 +45,9 @@ async def init_db():
 
 # Dependency to get the DB session
 async def get_session() -> AsyncSession:
+    """
+    Dependency that provides an async database session for FastAPI endpoints.
+    """
     async_session = sessionmaker(
         bind=async_engine,
         class_=AsyncSession,

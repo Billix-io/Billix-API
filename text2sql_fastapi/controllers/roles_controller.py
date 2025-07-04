@@ -13,12 +13,20 @@ super_admin_checker = Depends(RoleChecker([RoleEnum.super_admin]))
 roles_router = APIRouter()
 role_service = RoleDAL()
 
+"""
+Endpoints for managing user roles: create, retrieve, update, list, and delete roles.
+Only super_admin can manage roles.
+"""
+
 @roles_router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     role: RoleCreate, 
     session: AsyncSession = Depends(get_session), 
     
 ):
+    """
+    Create a new user role. Fails if a role with the same name exists.
+    """
     # Check if role with the same name already exists
     existing_role = await role_service.get_role_by_name(role.name, session)
     if existing_role:
@@ -34,6 +42,9 @@ async def get_role_by_id(
     role_id: str, 
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Retrieve a user role by its ID. Only accessible by super_admin.
+    """
     role = await role_service.get_role_by_id(role_id, session)
     if not role:
         raise HTTPException(
@@ -46,6 +57,9 @@ async def get_role_by_id(
 async def get_all_roles(
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    List all user roles. Only accessible by super_admin.
+    """
     roles = await role_service.get_all_roles(session)
     return roles
 
@@ -55,6 +69,9 @@ async def update_role(
     role_update: RoleUpdate, 
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Update a user role by its ID. Only accessible by super_admin.
+    """
     updated_role = await role_service.update_role(role_id, role_update, session)
     if not updated_role:
         raise HTTPException(
@@ -68,6 +85,9 @@ async def delete_role(
     role_id: str, 
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Delete a user role by its ID. Only accessible by super_admin.
+    """
     success = await role_service.delete_role(role_id, session)
     if not success:
         raise HTTPException(

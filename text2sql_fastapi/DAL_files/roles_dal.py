@@ -5,19 +5,34 @@ from models.roles import Role
 from schemas.roles_schemas import RoleCreate, RoleUpdate
 from sqlalchemy.sql import exists
 
+"""
+Data Access Layer for user role management: create, retrieve, update, delete, and check roles.
+"""
+
 class RoleDAL:
+    """
+    Data Access Layer for user role management.
+    """
 
     async def role_exists(self, role_id: str, db_session: AsyncSession) -> bool:
-        
+        """
+        Check if a role exists by its unique ID.
+        """
         result = await db_session.execute(select(Role).where(Role.role_id == role_id))
         print(f"Role exists: {role_id}",'--------------------------------')
         return result.scalar_one_or_none() is not None
     
     async def get_all_roles(self, db_session: AsyncSession) -> list[Role]:
+        """
+        List all user roles in the database.
+        """
         result = await db_session.execute(select(Role))
         return result.scalars().all()
     
     async def create_role(self, role_data: RoleCreate, db_session: AsyncSession) -> Role:
+        """
+        Create a new user role, or return the existing one if it already exists by name.
+        """
         # Check if the role already exists by name
         existing_role = await self.get_role_by_name(role_data.name,db_session)
         if existing_role:
@@ -36,17 +51,26 @@ class RoleDAL:
 
 
     async def get_role_by_id(self, role_id: str, db_session: AsyncSession) -> Role:
+        """
+        Retrieve a user role by its unique ID.
+        """
         # Check if the role exists
         result = await db_session.execute(select(Role).where(Role.role_id == role_id))
         return result.scalar_one_or_none()
 
     async def get_role_by_name(self, name: str, db_session: AsyncSession) -> Role:
+        """
+        Retrieve a user role by its name.
+        """
         result = await db_session.execute(
             select(Role).where(Role.name == name)
         )
         return result.scalar_one_or_none()
 
     async def update_role(self, role_id: str, role_data: RoleUpdate, db_session: AsyncSession) -> Role:
+        """
+        Update a user role by its ID.
+        """
         role = await self.get_role_by_id(role_id,db_session)
         if not role:
             return None
@@ -57,6 +81,9 @@ class RoleDAL:
         return role
 
     async def delete_role(self, role_id: str, db_session: AsyncSession) -> bool:
+        """
+        Delete a user role by its ID.
+        """
         role = await self.get_role_by_id(role_id,db_session)
         if not role:
             return False

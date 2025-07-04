@@ -8,14 +8,24 @@ from schemas.user_subscription_schemas import UserSubscriptionCreate, UserSubscr
 
 user_subscription_router = APIRouter()
 
+"""
+Endpoints for managing user subscriptions: create, retrieve, and update subscriptions.
+"""
+
 @user_subscription_router.post("/", response_model=UserSubscriptionResponse, status_code=status.HTTP_201_CREATED)
 async def create_subscription(subscription_data: UserSubscriptionCreate, session: AsyncSession = Depends(get_session)):
+    """
+    Create a new user subscription.
+    """
     dal = UserSubscriptionDAL(session)
     subscription = await dal.create_subscription(subscription_data.dict())
     return subscription
 
 @user_subscription_router.get("/user/{user_id}", response_model=UserSubscriptionResponse)
 async def get_subscription(user_id: uuid.UUID, session: AsyncSession = Depends(get_session)):
+    """
+    Retrieve a user subscription by user ID.
+    """
     dal = UserSubscriptionDAL(session)
     subscription = await dal.get_by_user_id(user_id)
     if not subscription:
@@ -24,6 +34,9 @@ async def get_subscription(user_id: uuid.UUID, session: AsyncSession = Depends(g
 
 @user_subscription_router.put("/user/{user_id}", response_model=UserSubscriptionResponse)
 async def update_subscription(user_id: uuid.UUID, update_data: UserSubscriptionUpdate, session: AsyncSession = Depends(get_session)):
+    """
+    Update a user subscription by user ID.
+    """
     dal = UserSubscriptionDAL(session)
     subscription = await dal.update_subscription(user_id, update_data.dict(exclude_unset=True))
     if not subscription:
