@@ -11,7 +11,6 @@ SQLALCHEMY_DATABASE_URL = (
     f"@{settings.database_hostname}:{settings.database_port}/{settings.database_name}"
 )
 
-# Create async engine
 async_engine: AsyncEngine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
     echo=True,
