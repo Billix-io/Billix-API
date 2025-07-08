@@ -40,6 +40,4 @@ class UserSubscription(Base):
     updateUrl = Column(Text, nullable=True)
     updatedAt = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-
-    plan = relationship("Plan", backref="subscriptions")
    
