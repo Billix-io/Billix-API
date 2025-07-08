@@ -5,8 +5,6 @@ from DAL_files.api_usage_dal import ApiUsageDAL
 from schemas.api_usage_schemas import ApiUsageCreate, ApiUsageUpdate, ApiUsageResponse
 from database import get_session
 import uuid
-from dependencies import get_current_user
-from schemas.user_schemas import UserBase
 
 api_usage_router = APIRouter()
 usage_service = ApiUsageDAL()
@@ -14,13 +12,12 @@ usage_service = ApiUsageDAL()
 @api_usage_router.post("/", response_model=ApiUsageResponse, status_code=status.HTTP_201_CREATED)
 async def create_usage(
     usage: ApiUsageCreate,
-    session: AsyncSession = Depends(get_session),
-    current_user: UserBase = Depends(get_current_user)
+    session: AsyncSession = Depends(get_session)
 ):
     # Attach user_id from current_user by creating a new ApiUsageCreate with user_id
   
     
-    created_usage = await usage_service.create_usage_with_user_id(usage,current_user.user_id, session)
+    created_usage = await usage_service.create_usage_with_user_id(usage, session)
     return created_usage
 
 @api_usage_router.get("/", response_model=List[ApiUsageResponse])

@@ -5,10 +5,7 @@ from schemas.roles_schemas import RoleCreate, RoleUpdate, RoleResponse
 from models.enums import RoleEnum
 from database import get_session
 from DAL_files.roles_dal import RoleDAL
-from dependencies import RoleChecker, get_current_user
 
-# Only super_admin can manage roles
-super_admin_checker = Depends(RoleChecker([RoleEnum.super_admin]))
 
 roles_router = APIRouter()
 role_service = RoleDAL()
@@ -37,7 +34,7 @@ async def create_role(
     created_role = await role_service.create_role(role, session)
     return created_role
 
-@roles_router.get("/{role_id}", response_model=RoleResponse, status_code=status.HTTP_200_OK, dependencies=[super_admin_checker])
+@roles_router.get("/{role_id}", response_model=RoleResponse, status_code=status.HTTP_200_OK)
 async def get_role_by_id(
     role_id: str, 
     session: AsyncSession = Depends(get_session)
@@ -53,7 +50,7 @@ async def get_role_by_id(
         )
     return role
 
-@roles_router.get("/", response_model=list[RoleResponse], status_code=status.HTTP_200_OK, dependencies=[super_admin_checker])
+@roles_router.get("/", response_model=list[RoleResponse], status_code=status.HTTP_200_OK)
 async def get_all_roles(
     session: AsyncSession = Depends(get_session)
 ):
@@ -63,7 +60,7 @@ async def get_all_roles(
     roles = await role_service.get_all_roles(session)
     return roles
 
-@roles_router.put("/{role_id}", response_model=RoleResponse, status_code=status.HTTP_200_OK, dependencies=[super_admin_checker])
+@roles_router.put("/{role_id}", response_model=RoleResponse, status_code=status.HTTP_200_OK)
 async def update_role(
     role_id: str, 
     role_update: RoleUpdate, 
@@ -80,7 +77,7 @@ async def update_role(
         )
     return updated_role
 
-@roles_router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[super_admin_checker])
+@roles_router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
     role_id: str, 
     session: AsyncSession = Depends(get_session)

@@ -27,23 +27,28 @@ class ApiUsageDAL:
         result = await db_session.execute(select(ApiUsage).offset(skip).limit(limit))
         return result.scalars().all()
 
-    async def get_user_usages(self, user_id: uuid.UUID, db_session: AsyncSession, skip: int = 0, limit: int = 100) -> List[ApiUsage]:
+    async def get_user_usages(self, user_id: str, db_session: AsyncSession) -> List[ApiUsage]:
         """
         List all API usage records for a given user with optional pagination.
         """
-        result = await db_session.execute(select(ApiUsage).where(ApiUsage.user_id == user_id).offset(skip).limit(limit))
-        return result.scalars().all()
+        result = await db_session.execute(select(ApiUsage).where(ApiUsage.userId == user_id))
+        result= result.scalar_one_or_none()
+        return result
 
-    async def update_usage(self, usage_id: uuid.UUID, usage: ApiUsageUpdate, db_session: AsyncSession) -> Optional[ApiUsage]:
+    async def update_usage(self, user_id: str, usage: ApiUsageUpdate, db_session: AsyncSession) -> Optional[ApiUsage]:
         """
-        Update an API usage record by its ID.
+        Update an API usage record by its ID and increment usage counters by 1.
         """
-        db_usage = await self.get_usage(usage_id, db_session)
+        db_usage = await self.get_user_usages(user_id, db_session)
+        print(db_usage.__dict__,"------------")
         if not db_usage:
             return None
         update_data = usage.dict(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_usage, field, value)
+
+        if hasattr(db_usage, 'chatUsage') and db_usage.invoiceUsage is not None:
+            db_usage.chatUsage += 1
         await db_session.commit()
         await db_session.refresh(db_usage)
         return db_usage
@@ -59,14 +64,15 @@ class ApiUsageDAL:
         await db_session.commit()
         return True
 
-    async def create_usage_with_user_id(self, usage_data: ApiUsageCreate,user_id: uuid.UUID, db_session: AsyncSession) -> ApiUsage:
+    async def create_usage_with_user_id(self, usage_data: ApiUsageCreate, db_session: AsyncSession) -> ApiUsage:
         """
-        Create a new API usage record for a given user.
+        Create a new API usage record for a given user. chatUsage and invoiceUsage default to 0.
         """
         data = usage_data.model_dump()
         db_usage = ApiUsage(
             **data,
-            user_id=user_id
+            chatUsage=0,
+            invoiceUsage=0
         )
         db_session.add(db_usage)
         await db_session.commit()

@@ -1,42 +1,39 @@
 """
 Pydantic schemas for API usage records, including creation, update, and response formats.
 """
-from pydantic import BaseModel, UUID4, condecimal, conint
-from typing import Optional, Annotated
+from pydantic import BaseModel
+from typing import Optional
 from datetime import datetime
-from decimal import Decimal
+import uuid
 
 class ApiUsageBase(BaseModel):
     """
-    Base schema for API usage information, including endpoint, units, and cost.
+    Base schema for API usage information, matching the ApiUsage model fields.
     """
-    api_name: str
-    endpoint: str
-    units_used: Annotated[int, conint(ge=0)]
-    cost_usd: Annotated[Decimal, condecimal(max_digits=10, decimal_places=4)]
-    api_key_used: str
+    userId: str
 
 class ApiUsageCreate(ApiUsageBase):
     """
-    Schema for creating a new API usage record.
+    Schema for creating a new API usage record. chatUsage and invoiceUsage are not included and default to 0 in the model.
     """
     pass
 
 class ApiUsageUpdate(BaseModel):
     """
-    Schema for updating API usage units or cost.
+    Schema for updating API usage fields.
     """
-    units_used: Optional[Annotated[int, conint(ge=0)]] = None
-    cost_usd: Optional[Annotated[Decimal, condecimal(max_digits=10, decimal_places=4)]] = None
+    chatUsage: Optional[int] = None
+    invoiceUsage: Optional[int] = None
+    resetDate: Optional[datetime] = None
+    updatedAt: Optional[datetime] = None
 
 class ApiUsageInDB(ApiUsageBase):
     """
-    Schema for API usage data as stored in the database, including IDs and timestamps.
+    Schema for API usage data as stored in the database, including the record ID.
     """
-    usage_id: UUID4
-    user_id: UUID4
-    status_active: bool = True
-    created_at: datetime
+    id: uuid.UUID
+    chatUsage: int
+    invoiceUsage: int
 
     class Config:
         from_attributes = True

@@ -1,18 +1,25 @@
-from sqlalchemy import Column, Integer, String, Float
+from sqlalchemy import Column, Integer, String, Boolean, Text
 from database import Base
-from sqlalchemy.dialects.postgresql import JSONB
-import uuid
-from sqlalchemy import text
-from sqlalchemy.dialects.postgresql import UUID
 
 class Plan(Base):
+    """
+    SQLAlchemy model for plans, matching the latest database schema and Pydantic schema.
+    """
     __tablename__ = "plan"
 
-    plan_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
-    title = Column(String, nullable=False)
-    description = Column(String)
-    monthlyPrice = Column(Float, nullable=False)
-    yearlyPrice = Column(Float, nullable=False)
-    priceId = Column(String,nullable=False)  # Stripe or payment provider price id
-    features = Column(JSONB, nullable=False)  # List of feature dicts, e.g. [{"text": "..."}]
-    tokens = Column(Integer, nullable=False)  # Number of tokens this plan provides 
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    productId = Column(Integer, nullable=False)
+    productName = Column(Text, nullable=True)
+    variantId = Column(Integer, nullable=False)
+    name = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    price = Column(Text, nullable=False)
+    isUsageBased = Column(Boolean, nullable=False, default=False)
+    interval = Column(Text, nullable=True)
+    intervalCount = Column(Integer, nullable=True)
+    trialInterval = Column(Text, nullable=True)
+    trialIntervalCount = Column(Integer, nullable=True)
+    sort = Column(Integer, nullable=True)
+    paddlePriceId = Column(Text, nullable=True)
+    chatLimit = Column(Integer, nullable=True)
+    invoiceLimit = Column(Integer, nullable=True) 

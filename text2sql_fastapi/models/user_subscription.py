@@ -1,19 +1,46 @@
-from sqlalchemy import Column, Numeric, DateTime, ForeignKey, Integer
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
-import uuid
-from datetime import datetime
 from database import Base
+from datetime import datetime
 
 class UserSubscription(Base):
-    __tablename__ = "user_subscription"
+    """
+    SQLAlchemy model for subscriptions, matching the latest database schema and Pydantic schema.
+    Includes foreign key relationships to User and Plan.
+    """
+    __tablename__ = "subscription"
 
-    subscription_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False, unique=True)
-    plan_id = Column(UUID(as_uuid=True), ForeignKey("plan.plan_id"), nullable=False)
-    total_tokens_purchased = Column(Numeric(20, 0), nullable=False)
-    tokens_remaining = Column(Numeric(20, 0), nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-    user = relationship("User", back_populates="subscription")
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    lemonSqueezyId = Column(Text, nullable=True)
+    orderId = Column(Integer, nullable=True)
+    name = Column(Text, nullable=False)
+    email = Column(Text, nullable=False)
+    status = Column(Text, nullable=False)
+    statusFormatted = Column(Text, nullable=False)
+    renewsAt = Column(Text, nullable=True)
+    endsAt = Column(Text, nullable=True)
+    trialEndsAt = Column(Text, nullable=True)
+    price = Column(Text, nullable=False)
+    isUsageBased = Column(Boolean, nullable=False, default=False)
+    isPaused = Column(Boolean, nullable=False, default=False)
+    subscriptionItemId = Column(Integer, nullable=False, autoincrement=True)
+
+    # Foreign keys
+    userId = Column(Text, ForeignKey('User.id'), nullable=False)
+    planId = Column(Integer, ForeignKey('plan.id'), nullable=False)
+
+    cancelUrl = Column(Text, nullable=True)
+    createdAt = Column(DateTime, nullable=False, default=datetime.utcnow)
+    paddleCustomerId = Column(Text, nullable=True)
+    paddlePriceId = Column(Text, nullable=True)
+    paddleProductId = Column(Text, nullable=True)
+    paddleSubscriptionId = Column(Text, nullable=True)
+    paddleTransactionId = Column(Text, nullable=True)
+    provider = Column(Text, nullable=False, default='lemonsqueezy')
+    updateUrl = Column(Text, nullable=True)
+    updatedAt = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # ORM relationships
+    user = relationship("User", backref="subscriptions")
+    plan = relationship("Plan", backref="subscriptions")
    

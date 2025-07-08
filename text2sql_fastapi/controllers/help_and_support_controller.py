@@ -2,8 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from DAL_files.help_and_support_dal import (create_help_and_support, get_help_and_support_by_id, get_all_help_and_support, update_help_and_support_status)
 from schemas.help_and_support_schemas import HelpAndSupportCreate, HelpAndSupportResponse
-from dependencies import RoleChecker, get_current_user, AccessTokenBearer
-from schemas.user_schemas import UserCreate, UserUpdate, UserLogin, UserBase
 from dependencies import get_session
 from fastapi import BackgroundTasks
 from fastapi_mail import FastMail, MessageSchema, MessageType, ConnectionConfig

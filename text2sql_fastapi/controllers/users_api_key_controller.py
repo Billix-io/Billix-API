@@ -18,7 +18,7 @@ async def create_api_key(data: UsersApiKeyCreate, db: AsyncSession = Depends(get
     """
     dal = UsersApiKeyDAL(db)
     api_key = secrets.token_urlsafe(32)
-    return await dal.create_api_key(user_id=data.user_id, api_key=api_key, expires_at=data.expires_at)
+    return await dal.create_api_key(user_id=data.user_id, api_key=api_key,name=data.name , expires_at=data.expires_at)
 
 @users_api_key_router.get("/user/{user_id}", response_model=list[UsersApiKeyOut])
 async def list_user_api_keys(user_id: str, db: AsyncSession = Depends(get_session)):

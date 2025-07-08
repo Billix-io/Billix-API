@@ -19,6 +19,4 @@ class Role(Base):
     created_at = Column(TIMESTAMP, nullable=False, server_default=text("now()"))
     updated_at = Column(TIMESTAMP, nullable=False, server_default=text("now()"))
 
-    # Relationships
-    users = relationship("User", back_populates="role")
     

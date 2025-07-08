@@ -5,208 +5,67 @@ from utils import decode_token
 from fastapi.exceptions import HTTPException
 from database import get_session
 from sqlmodel.ext.asyncio.session import AsyncSession
-from DAL_files.users_dal import UserDAL
 from DAL_files.roles_dal import RoleDAL
 from DAL_files.users_api_key_dal import UsersApiKeyDAL
 from typing import List, Any, Optional
-from schemas.user_schemas import UserBase
 from redis_store import token_in_blocklist
 from DAL_files.payment_dal import PaymentDAL
-from DAL_files.user_subscription_dal import UserSubscriptionDAL
 from datetime import datetime
 
-user_service=UserDAL()
-role_service=RoleDAL()
 
-class TokenBearer(HTTPBearer):
-    """
-    Custom HTTPBearer for validating JWT tokens and checking blocklist status.
-    """
-    def __init__(self, auto_error=True):
-        super().__init__(auto_error=auto_error)
 
-    async def __call__(self, request: Request) -> [HTTPAuthorizationCredentials, None]:
-        """
-        Validate the JWT token, check blocklist, and return token data if valid.
-        """
-        creds = await super().__call__(request)    
+from sqlalchemy.future import select
+from models.users_api_key import UsersApiKey
+from models.api_usage import ApiUsage
+from models.plan import Plan
 
-        token= creds.credentials
-        token_data=decode_token(token)
-
-        if not self.token_valid(token):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="invalid or expired token" 
-            )
-    
-        if await token_in_blocklist(token_data["jti"]):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="token has been blacklisted"
-            )
-        
-        self.verify_token_data(token_data)
-       
-        return token_data
-    
-    def token_valid(self,token:str)->bool:
-        """
-        Check if the provided token is valid and decodable.
-        """
-        token_data=decode_token(token)
-        return token_data is not None 
-    
-    def verify_token_data(self,token_data):
-        """
-        Abstract method to be overridden for custom token data validation.
-        """
-        raise NotImplementedError("please Override this method in chile class")
-    
-class AccessTokenBearer(TokenBearer):
-    """
-    TokenBearer subclass for validating access tokens (not refresh tokens).
-    """
-    def verify_token_data(self,token_data:dict)->None:
-        """
-        Ensure the token is an access token (not a refresh token).
-        """
-        if token_data and token_data["refresh"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="provide an access token"
-            )
-class RefreshTokenBearer(TokenBearer):
-    """
-    TokenBearer subclass for validating refresh tokens (not access tokens).
-    """
-    def verify_token_data(self,token_data:dict)->None:
-        """
-        Ensure the token is a refresh token (not an access token).
-        """
-        if token_data and not token_data["refresh"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="provide a Refresh token"
-            )
-
-async def get_current_user(
-    token_detail: dict = Depends(AccessTokenBearer()),
+async def chat_usage_checker(
+    x_api_key: str = Header(..., alias="X-API-Key"),
     session: AsyncSession = Depends(get_session)
 ):
     """
-    Retrieve the current user from the database using token details.
+    Dependency to check if the user (by API key) has not exceeded their chat usage limit.
+    Raises HTTPException if not allowed.
+    Returns user_id if allowed.
     """
-    user_email = token_detail.get("user", {}).get("email")
-    if not user_email:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid token payload: missing 'user.email'."
-        )
+    # 1. Check API key
+    result = await session.execute(
+        select(UsersApiKey).where(UsersApiKey.api_key == x_api_key)
+    )
+    api_key_obj = result.scalar_one_or_none()
+    if not api_key_obj:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    user_id = api_key_obj.user_id
 
-    user = await user_service.get_user_by_email(user_email, session)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found."
-        )
+    # 2. Get API usage for user
+    result = await session.execute(
+        select(ApiUsage).where(ApiUsage.userId == user_id)
+    )
+    usage_obj = result.scalar_one_or_none()
+    if not usage_obj:
+        raise HTTPException(status_code=404, detail="API usage not found for user")
+    chat_usage = usage_obj.chatUsage
 
-    return user
+    # 3. Get subscription for user
+    result = await session.execute(
+        select(UserSubscription).where(UserSubscription.userId == user_id)
+    )
+    subscription_obj = result.scalar_one_or_none()
+    if not subscription_obj:
+        raise HTTPException(status_code=404, detail="Subscription not found for user")
+    plan_id = subscription_obj.planId
 
-async def api_key_auth(
-    x_api_key: Optional[str] = Header(None),
-    session: AsyncSession = Depends(get_session)
-):
-    """
-    Authenticate using API key and check token requirements.
-    Returns user_id if valid, raises HTTPException otherwise.
-    """
-    if not x_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key is required. Please provide X-API-Key header."
-        )
-    
-    # Get API key details
-    api_key_dal = UsersApiKeyDAL(session)
-    api_key_record = await api_key_dal.get_api_key(x_api_key)
-    
-    if not api_key_record:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key."
-        )
-    
-    # Check if API key is expired
-    # if api_key_record.expires_at and api_key_record.expires_at < datetime.utcnow():
-    #     raise HTTPException(
-    #         status_code=status.HTTP_401_UNAUTHORIZED,
-    #         detail="API key has expired."
-    #     )
-    
-    # Get user subscription to check tokens
-    subscription_dal = UserSubscriptionDAL(session)
-    has_tokens = await subscription_dal.has_minimum_tokens(api_key_record.user_id, 5000)
-    
-    if not has_tokens:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient tokens. You need at least 5000 tokens to access this resource."
-        )
-    
-    # Return user_id for use in the endpoint
-    return api_key_record.user_id
+    # 4. Get plan for plan_id
+    result = await session.execute(
+        select(Plan).where(Plan.id == plan_id)
+    )
+    plan_obj = result.scalar_one_or_none()
+    if not plan_obj:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    chat_limit = plan_obj.chatLimit
 
-class RoleChecker:
-    """
-    Dependency for checking if the current user has one of the allowed roles.
-    """
-    def __init__(self, allowed_roles: List[str]) -> None:
-        self.allowed_roles = allowed_roles
+    # 5. Compare usage with plan limit
+    if chat_limit is not None and chat_usage >= chat_limit:
+        raise HTTPException(status_code=403, detail="Chat usage limit reached")
 
-    async def __call__(self, current_user: UserBase = Depends(get_current_user), session: AsyncSession = Depends(get_session)) -> bool:
-        """
-        Check if the current user's role is in the allowed roles list.
-        """
-        role = await role_service.get_role_by_id(current_user.role_id, session)
-        if not role:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Role not found."
-            )
-
-        if role.name in self.allowed_roles:
-            return True
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have the required role to access this resource."
-        )
-
-async def payment_required(current_user: UserBase = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    """
-    Dependency to ensure the user has made a successful payment.
-    """
-    from uuid import UUID
-    # Get the user's UUID (need to fetch full user object for user_id)
-    user = await user_service.get_user_by_email(current_user.email, session)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-    has_payment = await PaymentDAL.user_has_successful_payment(user.user_id, session)
-    if not has_payment:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="API access requires a successful payment.")
-    return True
-
-async def subscription_token_required(current_user: UserBase = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    """
-    Dependency to ensure the user has at least 5000 tokens in their subscription.
-    """
-    from uuid import UUID
-    # Get the user's UUID (need to fetch full user object for user_id)
-    user = await user_service.get_user_by_email(current_user.email, session)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-    has_tokens = await UserSubscriptionDAL.has_minimum_tokens(user.user_id, 5000, session)
-    if not has_tokens:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You need at least 5000 tokens to access this resource.")
-    return True
+    return user_id

@@ -13,22 +13,20 @@ import os
 from dotenv import load_dotenv
 from controllers.ai_sql_agent import query_router
 from controllers.roles_controller import roles_router
-from controllers.user_controller import auth_router
 from controllers.payment_controller import payment_router
 from controllers.tool_controller import tool_router
 from controllers.api_purchase_quota_controller import api_purchase_quota_router
 from controllers.api_usage_controller import api_usage_router
-from controllers.ai_stt_controller import stt_router
-from controllers.ai_tts_controller import tts_router
 from controllers.users_api_key_controller import users_api_key_router
 from controllers.plan_controller import plan_router
 from middleware import register_middleware
 from contextlib import asynccontextmanager
 from database import init_db
 import yaml
-from controllers.user_subscription_controller import user_subscription_router
+
 from controllers.invoice_controller import invoice_router
 from controllers.help_and_support_controller import help_support_router
+from controllers.user_usage_controller import user_usage_router
 
 load_dotenv()
 
@@ -110,13 +108,11 @@ register_middleware(app)
 version = "v1"
 app.include_router(query_router, prefix=f"/api/{version}/query", tags=["query"])
 app.include_router(roles_router, prefix=f"/api/{version}/roles", tags=["roles"])
-app.include_router(auth_router, prefix=f"/api/{version}/users",tags=["users"])
 app.include_router(payment_router, prefix=f"/api/{version}/payments",tags=["payments"])
 app.include_router(query_router, prefix=f"/api/{version}/query", tags=["query"])
 app.include_router(tool_router, prefix=f"/api/{version}/tools", tags=["tools"])
 app.include_router(api_purchase_quota_router, prefix=f"/api/{version}/purchase-quota", tags=["purchase-quota"])
 app.include_router(api_usage_router, prefix=f"/api/{version}/usage", tags=["usage"])
-app.include_router(user_subscription_router, prefix=f"/api/{version}/subscriptions", tags=["user subscriptions"])
 app.include_router(users_api_key_router, prefix=f"/api/{version}/api-keys", tags=["api-keys"])
 app.include_router(plan_router, prefix=f"/api/{version}/plans", tags=["plans"])
 app.include_router(invoice_router,prefix=f"/api/{version}/invoice", tags=["invoices"])

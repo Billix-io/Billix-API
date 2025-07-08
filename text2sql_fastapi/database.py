@@ -22,16 +22,12 @@ async def init_db():
     Initializes the database by creating all tables defined in the models.
     """
     print("⏳ Initializing DB...")
-    from models.users import User
-    from models.payment import Payment
-    from models.user_database import UserDatabase
-    from models.roles import Role
     from models.api_usage import ApiUsage
-    from models.api_purchase_quota import ApiPurchaseQuota
     from models.plan import Plan
     from models.user_subscription import UserSubscription
     from models.users_api_key import UsersApiKey
     from models.help_and_support import HelpAndSupport
+    from models.user_usage import UserUsage
     
  
 

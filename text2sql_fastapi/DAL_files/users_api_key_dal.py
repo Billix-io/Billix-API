@@ -16,11 +16,11 @@ class UsersApiKeyDAL:
         """
         self.db_session = db_session
 
-    async def create_api_key(self, user_id, api_key, expires_at=None):
+    async def create_api_key(self, user_id, api_key,name, expires_at=None):
         """
         Create a new API key for a user with optional expiration.
         """
-        key = UsersApiKey(user_id=user_id, api_key=api_key, expires_at=expires_at)
+        key = UsersApiKey(user_id=user_id, api_key=api_key, expires_at=expires_at, name= name)
         self.db_session.add(key)
         await self.db_session.commit()
         await self.db_session.refresh(key)
@@ -46,6 +46,6 @@ class UsersApiKeyDAL:
         """
         key = await self.get_api_key(api_key)
         if key:
-            await self.db_session.delete(key)
-            await self.db_session.flush()
+             await self.db_session.delete(key)
+             await self.db_session.commit()
         return key 

@@ -16,18 +16,19 @@ from DAL_files.stt_dal import STTDAL
 from DAL_files.tts_dal import TTSDAL
 from schemas.tts_schemas import TTSRequest, TTSResponse
 import base64
-from dependencies import api_key_auth
+from dependencies import chat_usage_checker
 from schemas.api_usage_schemas import ApiUsageCreate, ApiUsageUpdate, ApiUsageResponse
 from models.user_subscription import UserSubscription
 from models.api_usage import ApiUsage
-from DAL_files.user_subscription_dal import UserSubscriptionDAL
 from DAL_files.api_usage_dal import ApiUsageDAL
+from DAL_files.user_usage_dal import  UserUsageDAL
 
 load_dotenv()
 query_router = APIRouter()
 stt_service = STTDAL()
 tts_service = TTSDAL()
 api_usage_service = ApiUsageDAL()
+user_usage_dal = UserUsageDAL()
 
 
 class QueryRequest(BaseModel):
@@ -60,7 +61,7 @@ def clean_sql(sql: str) -> str:
     return sql.strip()
 
 @query_router.post("/chat")
-async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session), user_id: str = Depends(api_key_auth)):
+async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session), user_id: str = Depends(chat_usage_checker)):
     model = Gemini(
         id="gemini-2.0-flash",
         api_key=settings.gemini_api_key
@@ -176,24 +177,10 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
                 total_token_usage += token_usage["total_tokens"]
             if refine_token_usage and isinstance(refine_token_usage, dict) and "total_tokens" in refine_token_usage:
                 total_token_usage += refine_token_usage["total_tokens"]
-            # Log API usage
-            usage_create = ApiUsageCreate(
-                api_name="llm_query",
-                endpoint="/api/v1/query/chat",
-                units_used=total_token_usage,
-                cost_usd=0,  # You can add cost calculation logic if needed
-                api_key_used="N/A",
-                status="success"
-            )
-            await api_usage_service.create_usage_with_user_id(usage_create, user_id, db)
-            # Deduct tokens from user_subscription
-            subscription_dal = UserSubscriptionDAL(db)
-            subscription = await subscription_dal.get_by_user_id(user_id)
-            if subscription:
-                new_tokens = int(subscription.tokens_remaining) - int(total_token_usage)
-                subscription.tokens_remaining = new_tokens
-                await db.commit()
-                await db.refresh(subscription)
+           
+            await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db)
+            await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
+   
             return {
                 "used_tool": llm_json["used_tool"],
                 "sql_query": sql_query,
@@ -254,24 +241,10 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
                 total_token_usage += token_usage["total_tokens"]
             if refine_token_usage and isinstance(refine_token_usage, dict) and "total_tokens" in refine_token_usage:
                 total_token_usage += refine_token_usage["total_tokens"]
-            # Log API usage
-            usage_create = ApiUsageCreate(
-                api_name="llm_query",
-                endpoint="/api/v1/query/chat",
-                units_used=total_token_usage,
-                cost_usd=0,  # You can add cost calculation logic if needed
-                api_key_used="N/A",
-                status="success"
-            )
-            await api_usage_service.create_usage_with_user_id(usage_create, user_id, db)
-            # Deduct tokens from user_subscription
-            subscription_dal = UserSubscriptionDAL(db)
-            subscription = await subscription_dal.get_by_user_id(user_id)
-            if subscription:
-                new_tokens = int(subscription.tokens_remaining) - int(total_token_usage)
-                subscription.tokens_remaining = new_tokens
-                await db.commit()
-                await db.refresh(subscription)
+  
+
+            await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db)
+            await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
             return {
                 "used_tool": None,
                 "sql_query": cleaned_query,
@@ -317,11 +290,14 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
                         "result": json.loads(query_result) if query_result.startswith("[") else query_result,
                         "refined_answer": refined_answer
                     }
+                
                 else:
                     raise HTTPException(
                         status_code=400, 
                         detail=f"Unable to generate a SELECT query for your request. Please rephrase your question to be more specific about what data you want to retrieve."
                     )
+                await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db)  
+                await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
             except Exception as retry_error:
                 raise HTTPException(
                     status_code=400, 
@@ -368,6 +344,8 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
                     status_code=400, 
                     detail=f"Error processing your request: {str(e)}"
                 )
+            await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db)
+            await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
         except Exception as final_error:
             raise HTTPException(
                 status_code=500, 
@@ -447,23 +425,10 @@ async def handle_query_logic(request, user_id, db, tools, agent: Agent, api_usag
         if refine_token_usage and "total_tokens" in refine_token_usage:
             total_token_usage += refine_token_usage["total_tokens"]
 
-        # log API usage
-        usage_create = ApiUsageCreate(
-            api_name="llm_query",
-            endpoint="/api/v1/query/chat",
-            units_used=total_token_usage,
-            cost_usd=0,
-            api_key_used="N/A",
-            status="success"
-        )
-        await api_usage_service.create_usage_with_user_id(usage_create, user_id, db)
 
-        subscription_dal = UserSubscriptionDAL(db)
-        subscription = await subscription_dal.get_by_user_id(user_id)
-        if subscription:
-            subscription.tokens_remaining = int(subscription.tokens_remaining) - int(total_token_usage)
-            await db.commit()
-            await db.refresh(subscription)
+     
+
+  
 
         return {
             "used_tool": llm_json["used_tool"],
@@ -534,22 +499,9 @@ async def handle_query_logic(request, user_id, db, tools, agent: Agent, api_usag
     if refine_token_usage and "total_tokens" in refine_token_usage:
         total_token_usage += refine_token_usage["total_tokens"]
 
-    usage_create = ApiUsageCreate(
-        api_name="llm_query",
-        endpoint="/api/v1/query/chat",
-        units_used=total_token_usage,
-        cost_usd=0,
-        api_key_used="N/A",
-        status="success"
-    )
-    await api_usage_service.create_usage_with_user_id(usage_create, user_id, db)
 
-    subscription_dal = UserSubscriptionDAL(db)
-    subscription = await subscription_dal.get_by_user_id(user_id)
-    if subscription:
-        subscription.tokens_remaining = int(subscription.tokens_remaining) - int(total_token_usage)
-        await db.commit()
-        await db.refresh(subscription)
+   
+
 
     return {
         "used_tool": None,
@@ -562,35 +514,7 @@ async def handle_query_logic(request, user_id, db, tools, agent: Agent, api_usag
     }
 
 
-# @query_router.post("/audio-chat")
-# async def audio_chat(
-#     db: AsyncSession = Depends(get_session),
-#     audio: UploadFile = File(None),
-#     text: str = None,
-#     token_check: bool = Depends(subscription_token_required),
-# ):
-#     """
-#     Accepts either an audio file or text. If audio is provided, transcribe it, query the DB, and return audio. If text, return text response.
-#     """
-#     if audio is not None:
-#         # 1. Transcribe audio to text
-#         transcribed_text = await stt_service.speech_to_text(audio)
-#         # 2. Query the DB using the transcribed text
-#         request = QueryRequest(prompt=transcribed_text)
-#         response = await query_db(request, db)
-#         # 3. Convert the result to audio using TTS
-#         # Use only the main result text for TTS
-#         result_text = str(response["result"]) if isinstance(response, dict) and "result" in response else str(response)
-#         tts_request = TTSRequest(text=result_text)
-#         audio_bytes = await tts_service.text_to_speech(tts_request)
-#         audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
-#         return {"audio_content": audio_b64, "transcription": transcribed_text}
-#     elif text is not None:
-#         # 1. Query the DB using the provided text
-#         request = QueryRequest(prompt=text)
-#         return await query_db(request, db)
-#     else:
-#         raise HTTPException(status_code=400, detail="You must provide either an audio file or text.")
+
 
 @query_router.post("/audio-chat")
 async def audio_chat(
@@ -598,7 +522,7 @@ async def audio_chat(
     audio: UploadFile = File(None),
     text: str = None,
     db_url: str = None,
-    user_id: str = Depends(api_key_auth)
+    user_id: str = Depends(chat_usage_checker)
 ):
     model = Gemini(id="gemini-2.0-flash", api_key=settings.gemini_api_key)
     agent = Agent(model=model)
@@ -620,6 +544,9 @@ async def audio_chat(
         tts_request = TTSRequest(text=result_text)
         audio_bytes = await tts_service.text_to_speech(tts_request)
         audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+        await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db) 
+        await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
+        
         return {"audio_content": audio_b64, "transcription": transcribed_text}
     elif text is not None:
         if not db_url:
@@ -633,3 +560,102 @@ async def audio_chat(
         return await handle_query_logic(request, user_id, db, tools, agent, api_usage_service)
     else:
         raise HTTPException(status_code=400, detail="You must provide either an audio file or text.")
+
+def parse_curl(curl_command: str):
+    # Remove leading/trailing whitespace and newlines
+    curl_command = curl_command.strip().replace("\n", " ")
+    # Use shlex to split the command
+    tokens = shlex.split(curl_command)
+    method = "GET"
+    url = None
+    headers = {}
+    data = None
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token in ["curl"]:
+            i += 1
+            continue
+        if token in ["-X", "--request"]:
+            method = tokens[i+1].upper()
+            i += 2
+            continue
+        if token in ["-H", "--header"]:
+            header = tokens[i+1]
+            if ":" in header:
+                k, v = header.split(":", 1)
+                headers[k.strip()] = v.strip()
+            i += 2
+            continue
+        if token in ["-d", "--data", "--data-raw", "--data-binary"]:
+            data = tokens[i+1]
+            i += 2
+            continue
+        if token in ["--url"]:
+            url = tokens[i+1]
+            i += 2
+            continue
+        if token.startswith("http"):  # fallback for url
+            url = token
+            i += 1
+            continue
+        i += 1
+    return method, url, headers, data
+
+@query_router.post("/api-chat")
+async def api_chat(request, user_id: str = Depends(chat_usage_checker), db: AsyncSession = Depends(get_session)):
+    """
+    Accepts a cURL command and a prompt. Parses the cURL, fetches data, builds a schema, and uses the LLM to answer the prompt using the fetched data.
+    """
+    method, url, headers, data = parse_curl(request.curl)
+    if not url:
+        raise HTTPException(status_code=400, detail="Could not parse URL from cURL command.")
+    model = Gemini(id="gemini-2.0-flash", api_key=settings.gemini_api_key)
+    agent = Agent(model=model)
+    # Fetch data from the API
+    async with httpx.AsyncClient() as client:
+        try:
+            req_args = {"headers": headers, "timeout": 10}
+            if data:
+                req_args["content"] = data.encode() if isinstance(data, str) else data
+            resp = await client.request(method, url, **req_args)
+            resp.raise_for_status()
+            resp_data = resp.json()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to fetch data from API: {str(e)}")
+    # If the data is a list, use the first item to build schema; else use the dict itself
+    if isinstance(resp_data, list) and resp_data:
+        sample = resp_data[0]
+    elif isinstance(resp_data, dict):
+        sample = resp_data
+    else:
+        raise HTTPException(status_code=400, detail="API did not return valid JSON data.")
+    # Build a schema string from the sample
+    def build_schema(obj: Dict[str, Any], prefix="") -> str:
+        lines = []
+        for k, v in obj.items():
+            if isinstance(v, dict):
+                lines.append(f"{prefix}{k}: (object)")
+                lines.append(build_schema(v, prefix=prefix + k + "."))
+            elif isinstance(v, list):
+                lines.append(f"{prefix}{k}: (list)")
+            else:
+                lines.append(f"{prefix}{k}: {type(v)._name_}")
+        return "\n".join(lines)
+    schema_str = build_schema(sample)
+    # Compose the prompt for the LLM
+    prompt = (
+        "You are a data analysis assistant. You are given a dataset (from an API) and a user question. "
+        "Use the data to answer the user's question as accurately as possible.\n\n"
+        f"Data Schema:\n{schema_str}\n\n"
+        f"Data Sample (JSON):\n{json.dumps(sample, indent=2)}\n\n"
+        f"User Question: {request.prompt}\n\n"
+        "If you need to reference the data, use the keys as shown in the schema. "
+        "If the data is a list, you may summarize or aggregate as needed. "
+        "Respond with a clear, user-friendly answer."
+    )
+    response = agent.run(prompt)
+    answer = response.content.strip() if response and response.content else "Sorry, I couldn't generate a response."
+    await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db) 
+    await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
+    return {"answer": answer, "data_sample": sample}
