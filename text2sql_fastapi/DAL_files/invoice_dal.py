@@ -5,27 +5,25 @@ from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from schemas.invoice_schemas import InvoiceData
 import fitz
 import base64
+import json
+import re
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 
-"""
-Data Access Layer for invoice extraction using LLMs and document parsing.
-Handles classification, extraction from text, PDF, and images.
-"""
 
 class SimpleInvoiceExtractor:
-    """
-    Extracts invoice data from text, PDF, or images using LLMs and prompt templates.
-    """
     def __init__(self, groq_api_key: str):
-        """
-        Initialize the extractor with a Groq API key and set up prompt templates.
-        """
         self.model = ChatGroq(
             temperature=0.1,
             groq_api_key=groq_api_key,
             model_name="meta-llama/llama-4-scout-17b-16e-instruct",
         )
+        self.model2 = ChatGroq(
+            temperature=0.1,
+            groq_api_key=groq_api_key,
+            model_name="llama-3.3-70b-versatile",
+        )
 
-        self.text_extract_prompt_template =self.image_text_extract_prompt = ChatPromptTemplate.from_messages([
+        self.text_extract_prompt_template = self.image_text_extract_prompt = ChatPromptTemplate.from_messages([
             ("system", "Extract all text content from this document exactly as it appears.\n      Maintain the original layout and formatting as much as possible.\n      Pay special attention to:\n      1. Table structures and numerical data\n      2. Invoice-specific fields like dates, amounts, and IDs\n      3. Vendor and customer information\n      4. Line items with quantities and prices"),
 
             ("human",
@@ -36,50 +34,48 @@ class SimpleInvoiceExtractor:
         ])
 
         self.prompt_template = ChatPromptTemplate.from_messages([
-                        ("system", """
-           You are an expert invoice data extraction and financial auditing assistant that works very quickly and efficiently. Extract all key information from the provided {{documentType}} and perform financial validation. Return **only** a valid JSON object with no extra text.
+            ("system", """
+You are an expert invoice data extraction assistant. You must return ONLY a valid JSON object with no additional text, formatting, or explanations.
 
-Extract the following key fields:
-1. Basic invoice details: number, date, due date, reference codes
-2. Vendor information: name, address, tax ID, contact info
-3. Customer information: name, address, contact info
-4. Line items with original field names:
-   - **Preserve original field labels as used in the document**. For example:
-     - If the document uses "Rate", use `"rate"` in the JSON.
-     - If it uses "Unit Price", use `"unitPrice"`.
-     - If it uses "Price", use `"price"`.
-   - The same rule applies for "Qty" vs "Quantity".
-   - Do **not** normalize the keys — use what is in the source.
-5. Financial details: subtotal, discounts, taxes, shipping, total, currency
-6. Payment information: method, terms, bank details, payment link if present
+CRITICAL RULES:
+1. Return ONLY the JSON object - no markdown, no code blocks, no explanations
+2. Ensure all JSON syntax is correct - no trailing commas, proper quotes, valid structure
+3. Use consistent field names throughout
+4. All string values must be properly quoted
+5. All numeric values should be strings for consistency
+6. Do not include any comments or extra text
 
-Additional instructions:
-- Identify the primary language using ISO 639-1
-- Identify the likely country based on address/currency
-- Assign realistic confidence scores (0–100) for major fields
-- Provide an overall extraction confidence score
-- If vendor name is missing, suggest 2–3 likely vendor types
-- If business category is unclear, suggest 2–3 possibilities with confidence scores (50–80 only)
-- Do not suggest vendor types if vendor name is present
-- If invoice is from a business to a customer, classify it as an outgoing/sales invoice
+Extract the following information from the document:
 
-FINANCIAL VALIDATION:
-- Ensure line item amount = quantity × unit price/rate
-- Ensure subtotal = sum of line items
-- Ensure total = subtotal + tax + shipping – discounts
-- Flag any inconsistencies or rounding issues
-- Validate tax based on country
+BASIC DETAILS:
+- Invoice number, date, due date
+- Reference numbers or codes
 
-TAX ACCOUNTING:
-- Extract all tax-related fields: tax rates, tax names (VAT, GST, etc.)
-- Identify any exemptions or zero-rated items
-- If multi-tax system (like India), break down components (CGST, SGST, etc.)
+VENDOR INFORMATION:
+- Name, address, tax ID, contact information
 
-PAYMENT INFO:
-- Extract payment method, terms (e.g., Net 30), and any banking/payment link info
-- Capture any early discount or late penalties if mentioned
+CUSTOMER INFORMATION:
+- Name, address, contact information
 
-Return JSON in this format (use source labels in `lineItems`):
+LINE ITEMS:
+- Description, quantity, unit price/rate, amount
+- Use original field names from document (e.g., "qty" vs "quantity", "rate" vs "unitPrice")
+
+FINANCIAL DETAILS:
+- Subtotal, taxes, discounts, shipping, total
+- Currency and tax information
+
+PAYMENT INFORMATION:
+- Payment method, terms, bank details
+- Payment links or early discount terms
+
+METADATA:
+- Language detection (ISO 639-1)
+- Country identification
+- Confidence scores for extraction accuracy
+- Financial validation and audit results
+
+Return the JSON in this exact structure:
 
 {{
   "invoiceNumber": "string",
@@ -88,19 +84,20 @@ Return JSON in this format (use source labels in `lineItems`):
   "vendor": {{
     "name": "string",
     "address": "string",
-    "taxId": "string"
+    "taxId": "string",
+    "contactInfo": "string"
   }},
   "customer": {{
     "name": "string",
-    "address": "string"
+    "address": "string",
+    "contactInfo": "string"
   }},
   "lineItems": [
     {{
       "description": "string",
-      "qty"/"quantity": "string",
-      "rate"/"unitPrice"/"price": "string",
-      "amount": "string",
-      "taxRate": "string"
+      "qty": "string",
+      "rate": "string",
+      "amount": "string"
     }}
   ],
   "financials": {{
@@ -111,14 +108,7 @@ Return JSON in this format (use source labels in `lineItems`):
     "shipping": "string",
     "total": "string",
     "currency": "string",
-    "taxName": "string",
-    "additionalTaxes": [
-      {{
-        "name": "string",
-        "rate": "string",
-        "amount": "string"
-      }}
-    ]
+    "taxName": "string"
   }},
   "payment": {{
     "method": "string",
@@ -130,66 +120,70 @@ Return JSON in this format (use source labels in `lineItems`):
       "swift": "string",
       "bankName": "string"
     }},
-    "paymentLink": "string",
-    "earlyDiscount": {{
-      "percentage": "string",
-      "days": "string"
-    }},
-    "latePenalty": {{
-      "percentage": "string",
-      "days": "string"
-    }}
+    "paymentLink": "string"
   }},
   "meta": {{
-    "language": "string (ISO 639-1 code)",
+    "language": "string",
     "languageName": "string",
     "country": "string",
     "countryCode": "string",
-    "region": "string",
     "confidence": {{
       "overall": 0,
       "fields": {{}}
     }},
     "audit": {{
-      "status": "PASS",
-      "issues": [
-        {{
-          "type": "string",
-          "severity": "LOW",
-          "description": "string",
-          "affectedFields": ["string"]
-        }}
-      ],
+      "status": "string",
+      "issues": [],
       "taxCompliance": {{
-        "status": "COMPLIANT",
+        "status": "string",
         "details": "string"
-      }},
-      "fraudIndicators": {{
-        "score": 0,
-        "flags": ["string"]
       }}
     }},
     "suggestions": {{
-      "invoiceType": "SALES",
+      "invoiceType": "string",
       "categories": [
-        {{"name": "string", "confidence": 60}},
-        {{"name": "string", "confidence": 55}}
+        {{"name": "string", "confidence": 0}}
       ],
       "vendorTypes": [],
-      "selectedCategory": null,
+      "selectedCategory": "string",
       "selectedVendorType": null
     }}
   }}
 }}
 
+IMPORTANT: Return ONLY the JSON object. Ensure all syntax is valid JSON.
 """),
             ("human", "Extract invoice data from this text and return structured JSON:\n{text}")
         ])
 
+    def clean_json_response(self, response: str) -> str:
+        """Clean the response to extract pure JSON"""
+        # Remove markdown code blocks
+        response = re.sub(r'```json\s*', '', response)
+        response = re.sub(r'```\s*$', '', response)
+        response = response.strip()
+        
+        # Try to find JSON object boundaries
+        start_idx = response.find('{')
+        if start_idx != -1:
+            # Find the last closing brace
+            brace_count = 0
+            end_idx = -1
+            for i in range(start_idx, len(response)):
+                if response[i] == '{':
+                    brace_count += 1
+                elif response[i] == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end_idx = i
+                        break
+            
+            if end_idx != -1:
+                response = response[start_idx:end_idx + 1]
+        
+        return response
+
     def classify_document(self, text: str) -> str:
-        """
-        Classify the document type (invoice, receipt, PO, etc.) based on text patterns.
-        """
         lower_text = text.lower()
         invoice_patterns = [
             "invoice", "bill to", "factura", "rechnung", "facture", "fattura", "发票", "インボイス",
@@ -221,6 +215,7 @@ Return JSON in this format (use source labels in `lineItems`):
             "nota de crédito", "gutschrift", "note de crédit", "nota di credito", "贷记通知单",
             "クレジットノート", "إشعار دائن", "הודעת זיכוי", "кредитное авизо"
         ]
+        
         for pattern in invoice_patterns:
             if pattern in lower_text:
                 return "invoice"
@@ -239,52 +234,55 @@ Return JSON in this format (use source labels in `lineItems`):
         for pattern in creditNote_patterns:
             if pattern in lower_text:
                 return "credit_note"
+        
         if (
             ("total" in lower_text and ("due" in lower_text or "amount" in lower_text)) or
             ("payment" in lower_text and "terms" in lower_text) or
             ("tax" in lower_text and "subtotal" in lower_text)
         ):
             return "invoice"
+        
         import re
         if re.search(r"inv[^a-z]", lower_text) and re.search(r"\d{4,}", lower_text):
             return "invoice"
         return "invoice"    
 
-
     def extract_invoice_fromate_from_text(self, text: str, doctype: str):
-        """
-        Extract structured invoice data from raw text using the LLM and prompt template.
-        """
         try:
-            # Create processing chain with metadata capture
-            chain = (
-                self.prompt_template 
-                | self.model 
-                | {"data": JsonOutputParser(), "metadata": lambda x: x}
-            )
-            
-            # Process text with document type context and token usage tracking
-            result = chain.invoke(
+            # Get raw response from model
+            chain = self.prompt_template | self.model2
+            response = chain.invoke(
                 {"text": text, "documentType": doctype},
                 config={"return_token_usage": True}
             )
             
-            # Extract token usage metadata
-       
-            usage = result["metadata"].usage_metadata
-            
-            # Return structured data with token usage
-            return result["data"]
+            # Clean the response to extract pure JSON
+            clean_response = self.clean_json_response(response.content)
+
+            # Parse JSON manually with better error handling
+            try:
+                parsed_data = json.loads(clean_response)
+                return parsed_data
+            except json.JSONDecodeError as json_error:
+                raise HTTPException(status_code=500, detail=str(json_error))
                 
-        
         except Exception as e:
             print(f"Error processing text: {e}")
-            raise
+            raise HTTPException(status_code=500, detail="Internal processing error")
+
+
+    def fix_common_json_issues(self, json_str: str) -> str:
+        """Fix common JSON formatting issues"""
+        # Remove trailing commas
+        json_str = re.sub(r',\s*}', '}', json_str)
+        json_str = re.sub(r',\s*]', ']', json_str)
+        
+        # Fix unescaped quotes in strings (basic fix)
+        # This is a simple approach - for more complex cases, you might need a more sophisticated parser
+        
+        return json_str
     
     def extract_from_pdf_bytes(self, pdf_bytes: bytes) -> InvoiceData:
-        """
-        Extract invoice data from PDF bytes using OCR and LLM extraction.
-        """
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         if doc.page_count == 0:
             raise ValueError("No pages found in PDF")
@@ -295,22 +293,20 @@ Return JSON in this format (use source labels in `lineItems`):
         return self.extract_from_base64_image(base64_image)
 
     def extract_from_base64_image(self, base64_image: str) -> InvoiceData:
-        """
-        Extract invoice data from a base64-encoded image using OCR and LLM extraction.
-        """
         try:
-            str_parser = StrOutputParser()
             chain = (
-            self.text_extract_prompt_template 
-            | self.model 
-            | {"text": StrOutputParser(), "metadata": lambda x: x}
+                self.text_extract_prompt_template 
+                | self.model 
+                | {"text": StrOutputParser(), "metadata": lambda x: x}
             )
-            result = chain.invoke({"image_url": f"data:image/png;base64,{base64_image}"},config={"return_token_usage": True})
+            result = chain.invoke(
+                {"image_url": f"data:image/png;base64,{base64_image}"},
+                config={"return_token_usage": True}
+            )
             
-       
-            token_usage=result["metadata"].usage_metadata
+            token_usage = result["metadata"].usage_metadata
             
-            return {"text":result["text"]}
+            return {"text": result["text"]}
             
         except Exception as e:
             print(f"Error processing base64 image: {e}")
