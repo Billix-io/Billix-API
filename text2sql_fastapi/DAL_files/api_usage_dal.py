@@ -47,8 +47,26 @@ class ApiUsageDAL:
         for field, value in update_data.items():
             setattr(db_usage, field, value)
 
-        if hasattr(db_usage, 'chatUsage') and db_usage.invoiceUsage is not None:
+        if hasattr(db_usage, 'chatUsage') and db_usage.chatUsage is not None:
             db_usage.chatUsage += 1
+        await db_session.commit()
+        await db_session.refresh(db_usage)
+        return db_usage
+    
+    async def update_usage(self, user_id: str, usage: ApiUsageUpdate, db_session: AsyncSession) -> Optional[ApiUsage]:
+        """
+        Update an API usage record by its ID and increment usage counters by 1.
+        """
+        db_usage = await self.get_user_usages(user_id, db_session)
+        print(db_usage.__dict__,"------------")
+        if not db_usage:
+            return None
+        update_data = usage.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(db_usage, field, value)
+
+        if hasattr(db_usage, 'invoiceUsage') and db_usage.invoiceUsage is not None:
+            db_usage.invoiceUsage += 1
         await db_session.commit()
         await db_session.refresh(db_usage)
         return db_usage

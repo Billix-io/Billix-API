@@ -27,6 +27,7 @@ import yaml
 from controllers.invoice_controller import invoice_router
 from controllers.help_and_support_controller import help_support_router
 from controllers.user_usage_controller import user_usage_router
+from controllers.invoice_service_controller import invoice_service_router
 
 load_dotenv()
 
@@ -117,5 +118,6 @@ app.include_router(users_api_key_router, prefix=f"/api/{version}/api-keys", tags
 app.include_router(plan_router, prefix=f"/api/{version}/plans", tags=["plans"])
 app.include_router(invoice_router,prefix=f"/api/{version}/invoice", tags=["invoices"])
 app.include_router(help_support_router,prefix=f"/api/{version}/help-support", tags=["Help and Support"])
+app.include_router(invoice_service_router,prefix=f"/api/{version}/invoice-service",tags=["invoice as Service"])
 
 

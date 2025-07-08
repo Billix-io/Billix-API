@@ -57,4 +57,11 @@ class InvoiceTextRequest(BaseModel):
     Schema for a request to extract invoice data from raw text.
     """
     text: str
+
+class InvoiceTextRequest2(BaseModel):
+    """
+    Schema for a request to extract invoice data from raw text.
+    """
+    text: str
+    doc_type:str
    
