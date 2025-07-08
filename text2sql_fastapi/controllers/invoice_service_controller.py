@@ -29,7 +29,7 @@ async def extract_invoice(request: InvoiceTextRequest2, user_id: int = Depends(i
     """
     try:
         invoice_data = invoice_extractor.extract_invoice_fromate_from_text(request.text, request.doc_type)
-        await api_usage_dal.update_usage(user_id, ApiUsageUpdate(), session)
+     
         await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), session)
         return invoice_data
     except Exception as e:

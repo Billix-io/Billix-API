@@ -6,7 +6,7 @@ class UserUsage(Base):
     """
     SQLAlchemy model for user usage, matching the database schema in the image.
     """
-    __tablename__ = "user_usage"
+    __tablename__ = "UserUsage"
 
     id = Column(Text, primary_key=True, nullable=False)
     userId = Column(Text, ForeignKey('User.id'), nullable=False)

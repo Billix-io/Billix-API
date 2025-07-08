@@ -11,7 +11,6 @@ class UserSubscription(Base):
     __tablename__ = "subscription"
 
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-    lemonSqueezyId = Column(Text, nullable=True)
     orderId = Column(Integer, nullable=True)
     name = Column(Text, nullable=False)
     email = Column(Text, nullable=False)
