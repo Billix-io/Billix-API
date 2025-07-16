@@ -18,29 +18,35 @@ load_dotenv()
 
 invoice_service_router = APIRouter()
 api_key = os.getenv("GROQ_API_KEY")
+if not api_key:
+    raise ValueError("GROQ_API_KEY environment variable is required")
 invoice_extractor = SimpleInvoiceExtractor(groq_api_key=api_key)
-api_usage_dal= ApiUsageDAL()
+api_usage_dal = ApiUsageDAL()
 user_usage_dal = UserUsageDAL()
 
 @invoice_service_router.post("/extract/invoice")
-async def extract_invoice(request: InvoiceTextRequest2, user_id: int = Depends(invoice_usage_checker), session: AsyncSession = Depends(get_session)):
+async def extract_invoice(request: InvoiceTextRequest2, user_id: str = Depends(invoice_usage_checker), session: AsyncSession = Depends(get_session)):
     """
     Classify document type and extract invoice data from provided text.
     """
     try:
         invoice_data = invoice_extractor.extract_invoice_fromate_from_text(request.text, request.doc_type)
      
-        await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), session)
+        # Increment invoice usage after successful API call
+        await api_usage_dal.increment_invoice_usage(user_id, session)
         return invoice_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @invoice_service_router.post("/extract/pdf-image-text")
-async def extract_pdf_image_text(file: UploadFile = File(...),user_id: int = Depends(invoice_usage_checker)):
+async def extract_pdf_image_text(file: UploadFile = File(...), user_id: str = Depends(invoice_usage_checker), session: AsyncSession = Depends(get_session)):
     """
     Extract invoice data from an uploaded PDF or image file (in-memory, no temp file).
     """
     try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+            
         suffix = os.path.splitext(file.filename)[1].lower()
         file_bytes = file.file.read()
        
@@ -52,6 +58,9 @@ async def extract_pdf_image_text(file: UploadFile = File(...),user_id: int = Dep
             invoice_data = invoice_extractor.extract_from_base64_image(base64_image)
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix}")
+        
+        # Increment invoice usage after successful API call
+        await api_usage_dal.increment_invoice_usage(user_id, session)
         return invoice_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

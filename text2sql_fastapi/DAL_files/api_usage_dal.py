@@ -1,9 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import update
 from typing import Optional, List
 from models.api_usage import ApiUsage
 from schemas.api_usage_schemas import ApiUsageCreate, ApiUsageUpdate
 import uuid
+from datetime import datetime
 
 """
 Data Access Layer for API usage management: create, retrieve, update, delete, and list usage records.
@@ -17,7 +19,7 @@ class ApiUsageDAL:
         """
         Retrieve an API usage record by its unique ID.
         """
-        result = await db_session.execute(select(ApiUsage).where(ApiUsage.usage_id == usage_id))
+        result = await db_session.execute(select(ApiUsage).where(ApiUsage.id == usage_id))
         return result.scalar_one_or_none()
 
     async def get_usages(self, db_session: AsyncSession, skip: int = 0, limit: int = 100) -> List[ApiUsage]:
@@ -25,51 +27,114 @@ class ApiUsageDAL:
         List all API usage records with optional pagination.
         """
         result = await db_session.execute(select(ApiUsage).offset(skip).limit(limit))
-        return result.scalars().all()
+        return list(result.scalars().all())
 
-    async def get_user_usages(self, user_id: str, db_session: AsyncSession) -> List[ApiUsage]:
+    async def get_user_usage(self, user_id: str, db_session: AsyncSession) -> Optional[ApiUsage]:
         """
-        List all API usage records for a given user with optional pagination.
+        Get API usage record for a given user.
         """
         result = await db_session.execute(select(ApiUsage).where(ApiUsage.userId == user_id))
-        result= result.scalar_one_or_none()
-        return result
+        return result.scalar_one_or_none()
 
-    async def update_usage(self, user_id: str, usage: ApiUsageUpdate, db_session: AsyncSession) -> Optional[ApiUsage]:
+    async def get_or_create_user_usage(self, user_id: str, db_session: AsyncSession) -> ApiUsage:
         """
-        Update an API usage record by its ID and increment usage counters by 1.
+        Get existing usage record or create a new one for the user.
         """
-        db_usage = await self.get_user_usages(user_id, db_session)
-        print(db_usage.__dict__,"------------")
-        if not db_usage:
-            return None
-        update_data = usage.dict(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(db_usage, field, value)
+        usage = await self.get_user_usage(user_id, db_session)
+        if not usage:
+            # Create new usage record
+            usage = ApiUsage(
+                userId=user_id,
+                chatUsage=0,
+                invoiceUsage=0,
+                resetDate=datetime.utcnow(),
+                createdAt=datetime.utcnow(),
+                updatedAt=datetime.utcnow()
+            )
+            db_session.add(usage)
+            await db_session.commit()
+            await db_session.refresh(usage)
+        return usage
 
-        if hasattr(db_usage, 'chatUsage') and db_usage.chatUsage is not None:
-            db_usage.chatUsage += 1
-        await db_session.commit()
-        await db_session.refresh(db_usage)
-        return db_usage
-    
-    async def update_usage(self, user_id: str, usage: ApiUsageUpdate, db_session: AsyncSession) -> Optional[ApiUsage]:
+    async def increment_chat_usage(self, user_id: str, db_session: AsyncSession) -> Optional[ApiUsage]:
         """
-        Update an API usage record by its ID and increment usage counters by 1.
+        Increment chat usage count for a user.
         """
-        db_usage = await self.get_user_usages(user_id, db_session)
-        print(db_usage.__dict__,"------------")
-        if not db_usage:
-            return None
-        update_data = usage.dict(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(db_usage, field, value)
+        usage = await self.get_or_create_user_usage(user_id, db_session)
+        if usage:
+            # Use direct SQL update targeting userId to avoid UUID type issues
+            stmt = (
+                update(ApiUsage)
+                .where(ApiUsage.userId == user_id)
+                .values(
+                    chatUsage=ApiUsage.chatUsage + 1,
+                    updatedAt=datetime.utcnow()
+                )
+            )
+            await db_session.execute(stmt)
+            await db_session.commit()
+            # Refresh the usage object
+            await db_session.refresh(usage)
+        return usage
 
-        if hasattr(db_usage, 'invoiceUsage') and db_usage.invoiceUsage is not None:
-            db_usage.invoiceUsage += 1
-        await db_session.commit()
-        await db_session.refresh(db_usage)
-        return db_usage
+    async def increment_invoice_usage(self, user_id: str, db_session: AsyncSession) -> Optional[ApiUsage]:
+        """
+        Increment invoice usage count for a user.
+        """
+        usage = await self.get_or_create_user_usage(user_id, db_session)
+        if usage:
+            # Use direct SQL update targeting userId to avoid UUID type issues
+            stmt = (
+                update(ApiUsage)
+                .where(ApiUsage.userId == user_id)
+                .values(
+                    invoiceUsage=ApiUsage.invoiceUsage + 1,
+                    updatedAt=datetime.utcnow()
+                )
+            )
+            await db_session.execute(stmt)
+            await db_session.commit()
+            # Refresh the usage object
+            await db_session.refresh(usage)
+        return usage
+
+    async def update_usage(self, user_id: str, usage_update: ApiUsageUpdate, db_session: AsyncSession) -> Optional[ApiUsage]:
+        """
+        Update API usage record with specific values.
+        """
+        usage = await self.get_or_create_user_usage(user_id, db_session)
+        if usage:
+            update_data = usage_update.dict(exclude_unset=True)
+            update_data['updatedAt'] = datetime.utcnow()
+            
+            stmt = (
+                update(ApiUsage)
+                .where(ApiUsage.userId == user_id)
+                .values(**update_data)
+            )
+            await db_session.execute(stmt)
+            await db_session.commit()
+            await db_session.refresh(usage)
+        return usage
+
+    async def update_usage_by_id(self, usage_id: uuid.UUID, usage_update: ApiUsageUpdate, db_session: AsyncSession) -> Optional[ApiUsage]:
+        """
+        Update API usage record by its ID with specific values.
+        """
+        usage = await self.get_usage(usage_id, db_session)
+        if usage:
+            update_data = usage_update.dict(exclude_unset=True)
+            update_data['updatedAt'] = datetime.utcnow()
+            
+            stmt = (
+                update(ApiUsage)
+                .where(ApiUsage.id == usage_id)
+                .values(**update_data)
+            )
+            await db_session.execute(stmt)
+            await db_session.commit()
+            await db_session.refresh(usage)
+        return usage
 
     async def delete_usage(self, usage_id: uuid.UUID, db_session: AsyncSession) -> bool:
         """

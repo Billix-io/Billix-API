@@ -16,19 +16,18 @@ from DAL_files.stt_dal import STTDAL
 from DAL_files.tts_dal import TTSDAL
 from schemas.tts_schemas import TTSRequest, TTSResponse
 import base64
-from dependencies import chat_usage_checker
+from dependencies import api_key_auth
 from schemas.api_usage_schemas import ApiUsageCreate, ApiUsageUpdate, ApiUsageResponse
 from models.user_subscription import UserSubscription
 from models.api_usage import ApiUsage
+from DAL_files.user_subscription_dal import UserSubscriptionDAL
 from DAL_files.api_usage_dal import ApiUsageDAL
-from DAL_files.user_usage_dal import  UserUsageDAL
 
 load_dotenv()
 query_router = APIRouter()
 stt_service = STTDAL()
 tts_service = TTSDAL()
 api_usage_service = ApiUsageDAL()
-user_usage_dal = UserUsageDAL()
 
 
 class QueryRequest(BaseModel):
@@ -61,7 +60,7 @@ def clean_sql(sql: str) -> str:
     return sql.strip()
 
 @query_router.post("/chat")
-async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session), user_id: str = Depends(chat_usage_checker)):
+async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session), user_id: str = Depends(api_key_auth)):
     model = Gemini(
         id="gemini-2.0-flash",
         api_key=settings.gemini_api_key
@@ -177,10 +176,24 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
                 total_token_usage += token_usage["total_tokens"]
             if refine_token_usage and isinstance(refine_token_usage, dict) and "total_tokens" in refine_token_usage:
                 total_token_usage += refine_token_usage["total_tokens"]
-           
-            await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db)
-            await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
-   
+            # Log API usage
+            usage_create = ApiUsageCreate(
+                api_name="llm_query",
+                endpoint="/api/v1/query/chat",
+                units_used=total_token_usage,
+                cost_usd=0,  # You can add cost calculation logic if needed
+                api_key_used="N/A",
+                status="success"
+            )
+            await api_usage_service.create_usage_with_user_id(usage_create, user_id, db)
+            # Deduct tokens from user_subscription
+            subscription_dal = UserSubscriptionDAL(db)
+            subscription = await subscription_dal.get_by_user_id(user_id)
+            if subscription:
+                new_tokens = int(subscription.tokens_remaining) - int(total_token_usage)
+                subscription.tokens_remaining = new_tokens
+                await db.commit()
+                await db.refresh(subscription)
             return {
                 "used_tool": llm_json["used_tool"],
                 "sql_query": sql_query,
@@ -241,10 +254,24 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
                 total_token_usage += token_usage["total_tokens"]
             if refine_token_usage and isinstance(refine_token_usage, dict) and "total_tokens" in refine_token_usage:
                 total_token_usage += refine_token_usage["total_tokens"]
-  
-
-            await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db)
-            await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
+            # Log API usage
+            usage_create = ApiUsageCreate(
+                api_name="llm_query",
+                endpoint="/api/v1/query/chat",
+                units_used=total_token_usage,
+                cost_usd=0,  # You can add cost calculation logic if needed
+                api_key_used="N/A",
+                status="success"
+            )
+            await api_usage_service.create_usage_with_user_id(usage_create, user_id, db)
+            # Deduct tokens from user_subscription
+            subscription_dal = UserSubscriptionDAL(db)
+            subscription = await subscription_dal.get_by_user_id(user_id)
+            if subscription:
+                new_tokens = int(subscription.tokens_remaining) - int(total_token_usage)
+                subscription.tokens_remaining = new_tokens
+                await db.commit()
+                await db.refresh(subscription)
             return {
                 "used_tool": None,
                 "sql_query": cleaned_query,
@@ -290,14 +317,11 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
                         "result": json.loads(query_result) if query_result.startswith("[") else query_result,
                         "refined_answer": refined_answer
                     }
-                
                 else:
                     raise HTTPException(
                         status_code=400, 
                         detail=f"Unable to generate a SELECT query for your request. Please rephrase your question to be more specific about what data you want to retrieve."
                     )
-                await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db)  
-                await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
             except Exception as retry_error:
                 raise HTTPException(
                     status_code=400, 
@@ -344,8 +368,6 @@ async def query_db(request: QueryRequest, db: AsyncSession = Depends(get_session
                     status_code=400, 
                     detail=f"Error processing your request: {str(e)}"
                 )
-            await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db)
-            await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
         except Exception as final_error:
             raise HTTPException(
                 status_code=500, 
@@ -425,10 +447,23 @@ async def handle_query_logic(request, user_id, db, tools, agent: Agent, api_usag
         if refine_token_usage and "total_tokens" in refine_token_usage:
             total_token_usage += refine_token_usage["total_tokens"]
 
+        # log API usage
+        usage_create = ApiUsageCreate(
+            api_name="llm_query",
+            endpoint="/api/v1/query/chat",
+            units_used=total_token_usage,
+            cost_usd=0,
+            api_key_used="N/A",
+            status="success"
+        )
+        await api_usage_service.create_usage_with_user_id(usage_create, user_id, db)
 
-     
-
-  
+        subscription_dal = UserSubscriptionDAL(db)
+        subscription = await subscription_dal.get_by_user_id(user_id)
+        if subscription:
+            subscription.tokens_remaining = int(subscription.tokens_remaining) - int(total_token_usage)
+            await db.commit()
+            await db.refresh(subscription)
 
         return {
             "used_tool": llm_json["used_tool"],
@@ -499,9 +534,22 @@ async def handle_query_logic(request, user_id, db, tools, agent: Agent, api_usag
     if refine_token_usage and "total_tokens" in refine_token_usage:
         total_token_usage += refine_token_usage["total_tokens"]
 
+    usage_create = ApiUsageCreate(
+        api_name="llm_query",
+        endpoint="/api/v1/query/chat",
+        units_used=total_token_usage,
+        cost_usd=0,
+        api_key_used="N/A",
+        status="success"
+    )
+    await api_usage_service.create_usage_with_user_id(usage_create, user_id, db)
 
-   
-
+    subscription_dal = UserSubscriptionDAL(db)
+    subscription = await subscription_dal.get_by_user_id(user_id)
+    if subscription:
+        subscription.tokens_remaining = int(subscription.tokens_remaining) - int(total_token_usage)
+        await db.commit()
+        await db.refresh(subscription)
 
     return {
         "used_tool": None,
@@ -544,9 +592,6 @@ async def audio_chat(
         tts_request = TTSRequest(text=result_text)
         audio_bytes = await tts_service.text_to_speech(tts_request)
         audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
-        await api_usage_service.update_usage(user_id, ApiUsageUpdate(), db) 
-        await user_usage_dal.update_usage(user_id, ApiUsageUpdate(), db)
-        
         return {"audio_content": audio_b64, "transcription": transcribed_text}
     elif text is not None:
         if not db_url:

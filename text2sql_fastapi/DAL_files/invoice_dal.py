@@ -45,6 +45,12 @@ CRITICAL RULES:
 5. All numeric values should be strings for consistency
 6. Do not include any comments or extra text
 
+DYNAMIC FIELD NAMES:
+- For all fields in lineItems (and anywhere else in the JSON where the document provides a field name), use the exact field names as they appear in the document.
+- For example, if the document uses "Unit price", "MRP", "Rate", "Qty", "Quantity", "Description", etc., use those exact keys in the output JSON.
+- Do not standardize, translate, or change the field names.
+- If a field is missing in the document, keep the value as null.
+
 Extract the following information from the document:
 
 BASIC DETAILS:
@@ -98,6 +104,7 @@ Return the JSON in this exact structure:
       "qty": "string",
       "rate": "string",
       "amount": "string"
+      // The keys here should match exactly as they appear in the document, e.g., "Unit price", "MRP", "Rate", etc.
     }}
   ],
   "financials": {{

@@ -6,7 +6,10 @@ from schemas.invoice_schemas import InvoiceTextRequest
 import tempfile
 import re
 from config import settings
-
+from dependencies import invoice_usage_checker
+from database import get_session
+from sqlmodel.ext.asyncio.session import AsyncSession
+from DAL_files.api_usage_dal import ApiUsageDAL
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -15,13 +18,14 @@ load_dotenv()
 invoice_router = APIRouter()
 api_key = settings.groq_api_key
 invoice_extractor = SimpleInvoiceExtractor(groq_api_key=api_key)
+api_usage_dal = ApiUsageDAL()
 
 """
 Invoice extraction endpoints for classifying documents and extracting invoice data from text, PDF, or images.
 """
 
 @invoice_router.post("/extract/invoice")
-def extract_invoice(request: InvoiceTextRequest):
+async def extract_invoice(request: InvoiceTextRequest, user_id: str = Depends(invoice_usage_checker), session: AsyncSession = Depends(get_session)):
     """
     Classify document type and extract invoice data from provided text.
     """
@@ -29,6 +33,9 @@ def extract_invoice(request: InvoiceTextRequest):
         doc_type = invoice_extractor.classify_document(request.text)
         print("-----------------",doc_type,"-------------")
         invoice_data = invoice_extractor.extract_invoice_fromate_from_text(request.text, doc_type)
+        
+        # Increment invoice usage after successful API call
+        await api_usage_dal.increment_invoice_usage(user_id, session)
         return invoice_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -36,11 +43,14 @@ def extract_invoice(request: InvoiceTextRequest):
 
 
 @invoice_router.post("/extract/pdf-image-text")
-async def extract_pdf_image_text(file: UploadFile = File(...)):
+async def extract_pdf_image_text(file: UploadFile = File(...), user_id: str = Depends(invoice_usage_checker), session: AsyncSession = Depends(get_session)):
     """
     Extract invoice data from an uploaded PDF or image file (in-memory, no temp file).
     """
     try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+            
         suffix = os.path.splitext(file.filename)[1].lower()
         file_bytes = file.file.read()
        
@@ -52,6 +62,9 @@ async def extract_pdf_image_text(file: UploadFile = File(...)):
             invoice_data = invoice_extractor.extract_from_base64_image(base64_image)
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix}")
+        
+        # Increment invoice usage after successful API call
+        await api_usage_dal.increment_invoice_usage(user_id, session)
         return invoice_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

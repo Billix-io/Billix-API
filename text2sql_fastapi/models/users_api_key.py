@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey,Text
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from database import Base
@@ -11,6 +11,7 @@ class UsersApiKey(Base):
     user_id = Column(Text, ForeignKey('User.id', ondelete='CASCADE'), nullable=False)
     name = Column(String, unique=True, nullable=False)
     api_key = Column(String, unique=True, nullable=False, index=True)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
 
