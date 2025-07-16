@@ -29,12 +29,19 @@ async def create_api_key(data: UsersApiKeyCreate, db: AsyncSession = Depends(get
         )
     except IntegrityError as e:
         # Handle database constraint violations (e.g., duplicate key, foreign key violations)
-        if "duplicate key" in str(e).lower() or "unique constraint" in str(e).lower():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="API key name already exists for this user"
-            )
-        elif "foreign key" in str(e).lower():
+        error_str = str(e)
+        if "UniqueViolationError" in error_str or "duplicate key" in error_str.lower():
+            if "users_api_key_name_key" in error_str:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="API key name already exists for this user"
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Duplicate value found"
+                )
+        elif "ForeignKeyViolationError" in error_str or "foreign key" in error_str.lower():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
@@ -51,7 +58,7 @@ async def create_api_key(data: UsersApiKeyCreate, db: AsyncSession = Depends(get
             detail=f"Validation error: {str(e)}"
         )
     except Exception as e:
-        # Log the actual error for debugging but don't expose it to the client
+      
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while creating the API key"
