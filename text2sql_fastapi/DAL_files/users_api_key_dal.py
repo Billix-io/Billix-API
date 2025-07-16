@@ -20,7 +20,7 @@ class UsersApiKeyDAL:
         """
         Create a new API key for a user with optional expiration.
         """
-        key = UsersApiKey(user_id=user_id, api_key=api_key,is_active=True, expires_at=expires_at, name= name)
+        key = UsersApiKey(user_id=user_id, api_key=api_key, expires_at=expires_at, name= name)
         self.db_session.add(key)
         await self.db_session.commit()
         await self.db_session.refresh(key)

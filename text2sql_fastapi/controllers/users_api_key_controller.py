@@ -22,8 +22,7 @@ async def create_api_key(data: UsersApiKeyCreate, db: AsyncSession = Depends(get
         user_id=data.user_id, 
         api_key=api_key, 
         name=data.name, 
-        expires_at=data.expires_at,
-        is_active=data.is_active
+        expires_at=data.expires_at
     )
 
 @users_api_key_router.get("/user/{user_id}", response_model=list[UsersApiKeyOut])
