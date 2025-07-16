@@ -34,9 +34,6 @@ class ApiUsageInDB(ApiUsageBase):
     id: uuid.UUID
     chatUsage: int
     invoiceUsage: int
-    resetDate: datetime
-    createdAt: datetime
-    updatedAt: datetime
 
     class Config:
         from_attributes = True

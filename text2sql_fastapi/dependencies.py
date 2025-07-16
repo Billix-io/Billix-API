@@ -13,7 +13,8 @@ from DAL_files.payment_dal import PaymentDAL
 from datetime import datetime
 from models.user_subscription import UserSubscription
 from models.user_usage import UserUsage
-from DAL_files.api_usage_dal import ApiUsageDAL
+from models.users_api_key import UsersApiKey
+
 
 from sqlalchemy.future import select
 from models.users_api_key import UsersApiKey
@@ -29,37 +30,35 @@ async def chat_usage_checker(
     Raises HTTPException if not allowed.
     Returns user_id if allowed.
     """
-    # 1. Check API key (only active keys)
+    # 1. Check API key
     result = await session.execute(
         select(UsersApiKey).where(
             UsersApiKey.api_key == x_api_key,
             UsersApiKey.is_active == True
         )
     )
+
     api_key_obj = result.scalar_one_or_none()
     if not api_key_obj:
-        raise HTTPException(status_code=401, detail="Invalid or inactive API key")
+        raise HTTPException(status_code=401, detail="Invalid API key")
     user_id = api_key_obj.user_id
 
     # 2. Get API usage for user
-    api_usage_dal = ApiUsageDAL()
-    usage_obj = await api_usage_dal.get_user_usage(user_id, session)
+    result = await session.execute(
+        select(ApiUsage).where(ApiUsage.userId == user_id)
+    )
+    usage_obj = result.scalar_one_or_none()
     if not usage_obj:
-        # Create usage record if it doesn't exist
-        usage_obj = await api_usage_dal.get_or_create_user_usage(user_id, session)
-    
+        raise HTTPException(status_code=404, detail="API usage not found for user")
     chat_usage = usage_obj.chatUsage
 
-    # 3. Get subscription for user (handle multiple subscriptions by getting the most recent)
+    # 3. Get subscription for user
     result = await session.execute(
-        select(UserSubscription).where(UserSubscription.userId == user_id).order_by(UserSubscription.createdAt.desc())
+        select(UserSubscription).where(UserSubscription.userId == user_id)
     )
-    subscription_objs = result.scalars().all()
-    if not subscription_objs:
+    subscription_obj = result.scalar_one_or_none()
+    if not subscription_obj:
         raise HTTPException(status_code=404, detail="Subscription not found for user")
-    
-    # Get the most recent subscription
-    subscription_obj = subscription_objs[0]
     plan_id = subscription_obj.planId
 
     # 4. Get plan for plan_id
@@ -86,7 +85,7 @@ async def invoice_usage_checker(
     Raises HTTPException if not allowed.
     Returns user_id if allowed.
     """
-    # 1. Check API key (only active keys)
+    # 1. Check API key
     result = await session.execute(
         select(UsersApiKey).where(
             UsersApiKey.api_key == x_api_key,
@@ -95,28 +94,25 @@ async def invoice_usage_checker(
     )
     api_key_obj = result.scalar_one_or_none()
     if not api_key_obj:
-        raise HTTPException(status_code=401, detail="Invalid or inactive API key")
+        raise HTTPException(status_code=401, detail="Invalid API key")
     user_id = api_key_obj.user_id
 
     # 2. Get API usage for user
-    api_usage_dal = ApiUsageDAL()
-    usage_obj = await api_usage_dal.get_user_usage(user_id, session)
+    result = await session.execute(
+        select(ApiUsage).where(ApiUsage.userId == user_id)
+    )
+    usage_obj = result.scalar_one_or_none()
     if not usage_obj:
-        # Create usage record if it doesn't exist
-        usage_obj = await api_usage_dal.get_or_create_user_usage(user_id, session)
-    
+        raise HTTPException(status_code=404, detail="API usage not found for user")
     invoice_usage = usage_obj.invoiceUsage
 
-    # 3. Get subscription for user (handle multiple subscriptions by getting the most recent)
+    # 3. Get subscription for user
     result = await session.execute(
-        select(UserSubscription).where(UserSubscription.userId == user_id).order_by(UserSubscription.createdAt.desc())
+        select(UserSubscription).where(UserSubscription.userId == user_id)
     )
-    subscription_objs = result.scalars().all()
-    if not subscription_objs:
+    subscription_obj = result.scalar_one_or_none()
+    if not subscription_obj:
         raise HTTPException(status_code=404, detail="Subscription not found for user")
-    
-    # Get the most recent subscription
-    subscription_obj = subscription_objs[0]
     plan_id = subscription_obj.planId
 
     # 4. Get plan for plan_id
