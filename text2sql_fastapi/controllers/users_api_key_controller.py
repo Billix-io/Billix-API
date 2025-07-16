@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from DAL_files.users_api_key_dal import UsersApiKeyDAL
 from schemas.users_api_key_schemas import UsersApiKeyCreate, UsersApiKeyOut, UsersApiKeyUpdate, UsersApiKeyToggle
@@ -16,14 +16,20 @@ async def create_api_key(data: UsersApiKeyCreate, db: AsyncSession = Depends(get
     """
     Create a new API key for a user with optional expiration and active status.
     """
-    dal = UsersApiKeyDAL(db)
-    api_key = secrets.token_urlsafe(32)
-    return await dal.create_api_key(
-        user_id=data.user_id, 
-        api_key=api_key, 
-        name=data.name, 
-        expires_at=data.expires_at
-    )
+    try:
+        dal = UsersApiKeyDAL(db)
+        api_key = secrets.token_urlsafe(32)
+        return await dal.create_api_key(
+            user_id=data.user_id,
+            api_key=api_key,
+            name=data.name,
+            expires_at=data.expires_at
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create API key: {str(e)}"
+        )
 
 @users_api_key_router.get("/user/{user_id}", response_model=list[UsersApiKeyOut])
 async def list_user_api_keys(user_id: str, db: AsyncSession = Depends(get_session)):
