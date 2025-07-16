@@ -39,6 +39,19 @@ class UsersApiKeyDAL:
         """
         result = await self.db_session.execute(select(UsersApiKey).where(UsersApiKey.user_id == user_id))
         return result.scalars().all()
+    
+    async def update_api_key_name(self, api_key, new_name):
+        """
+        Update the name of an API key.
+        """
+        key = await self.get_api_key(api_key)
+        if not key:
+            return None
+        
+        setattr(key, 'name', new_name)
+        await self.db_session.commit()
+        await self.db_session.refresh(key)
+        return key
 
     async def toggle_api_key_status(self, api_key):
         """

@@ -5,9 +5,12 @@ from schemas.users_api_key_schemas import UsersApiKeyCreate, UsersApiKeyOut, Use
 from sqlalchemy.exc import IntegrityError
 from pydantic import ValidationError
 from database import get_session
+from pydantic import BaseModel
 import secrets
 
 users_api_key_router = APIRouter()
+class UsersApiKeyNameUpdate(BaseModel):
+    name: str
 
 """
 Endpoints for managing user API keys: create, list, retrieve, enable/disable, and revoke API keys.
@@ -101,6 +104,48 @@ async def update_api_key_status(api_key: str, status: UsersApiKeyUpdate, db: Asy
     if not key:
         raise HTTPException(status_code=404, detail="API key not found")
     return key
+
+@users_api_key_router.put("/{api_key}/name", response_model=UsersApiKeyOut)
+async def update_api_key_name(api_key: str, name_data: UsersApiKeyNameUpdate, db: AsyncSession = Depends(get_session)):
+    """
+    Update the name of an API key.
+    """
+    try:
+        dal = UsersApiKeyDAL(db)
+        key = await dal.update_api_key_name(api_key, name_data.name)
+        if not key:
+            raise HTTPException(status_code=404, detail="API key not found")
+        return key
+    except IntegrityError as e:
+        # Handle database constraint violations (e.g., duplicate name)
+        error_str = str(e)
+        if "UniqueViolationError" in error_str or "duplicate key" in error_str.lower():
+            if "users_api_key_name_key" in error_str:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="API key name already exists for this user"
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Duplicate value found"
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Database constraint violation"
+            )
+    except ValidationError as e:
+        # Handle validation errors
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Validation error: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while updating the API key name"
+        )
 
 @users_api_key_router.patch("/{api_key}/toggle", response_model=UsersApiKeyOut)
 async def toggle_api_key_status(api_key: str, db: AsyncSession = Depends(get_session)):
