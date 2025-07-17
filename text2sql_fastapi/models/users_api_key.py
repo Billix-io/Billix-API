@@ -17,4 +17,4 @@ class UsersApiKey(Base):
 
     # Relationships
     user = relationship("User", back_populates="api_keys")
-    api_usages = relationship("ApiUsage", back_populates="users_api_key") 
+    api_usages = relationship("ApiUsage", back_populates="users_api_key",lazy="selectin") 

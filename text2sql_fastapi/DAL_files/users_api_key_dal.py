@@ -41,12 +41,9 @@ class UsersApiKeyDAL:
         """
         List all API keys for a given user.
         """
-        # result = await self.db_session.execute(select(UsersApiKey).where(UsersApiKey.user_id == user_id))
         result = await self.db_session.execute(
-        select(UsersApiKey)
-        .options(selectinload(UsersApiKey.api_usages))
-        .where(UsersApiKey.user_id == user_id)
-    )
+            select(UsersApiKey).where(UsersApiKey.user_id == user_id)
+        )
         return result.scalars().all()
     
     async def update_api_key_name(self, api_key, new_name):

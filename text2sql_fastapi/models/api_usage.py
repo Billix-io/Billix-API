@@ -19,4 +19,4 @@ class ApiUsage(Base):
     users_api_key_id = Column(UUID(as_uuid=True), ForeignKey('users_api_key.users_api_key_id'), nullable=True)
 
     user = relationship("User", back_populates="api_usages")
-    users_api_key = relationship("UsersApiKey", back_populates="api_usages")
+    users_api_key = relationship("UsersApiKey", back_populates="api_usages",lazy="selectin")
