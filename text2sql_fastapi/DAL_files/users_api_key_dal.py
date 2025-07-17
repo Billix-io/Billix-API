@@ -2,6 +2,7 @@ from models.users_api_key import UsersApiKey
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.orm import selectinload
 """
 Data Access Layer for user API key management: create, retrieve, list, and revoke API keys.
 """
@@ -28,16 +29,24 @@ class UsersApiKeyDAL:
 
     async def get_api_key(self, api_key):
         """
-        Retrieve an API key by its value.
+        Retrieve an API key by its value, including related api_usages.
         """
-        result = await self.db_session.execute(select(UsersApiKey).where(UsersApiKey.api_key == api_key))
-        return result.scalar_one_or_none()
+        result = await self.db_session.execute(
+            select(UsersApiKey).options(selectinload(UsersApiKey.api_usages)).where(UsersApiKey.api_key == api_key)
+        )
+        # return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def get_user_api_keys(self, user_id):
         """
         List all API keys for a given user.
         """
-        result = await self.db_session.execute(select(UsersApiKey).where(UsersApiKey.user_id == user_id))
+        # result = await self.db_session.execute(select(UsersApiKey).where(UsersApiKey.user_id == user_id))
+        result = await self.db_session.execute(
+        select(UsersApiKey)
+        .options(selectinload(UsersApiKey.api_usages))
+        .where(UsersApiKey.user_id == user_id)
+    )
         return result.scalars().all()
     
     async def update_api_key_name(self, api_key, new_name):

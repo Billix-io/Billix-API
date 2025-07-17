@@ -3,8 +3,9 @@ Pydantic schemas for user API keys, including creation and output formats.
 """
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
+from schemas.api_usage_schemas import ApiUsageResponse
 
 class UsersApiKeyBase(BaseModel):
     """
@@ -30,6 +31,7 @@ class UsersApiKeyOut(UsersApiKeyBase):
     api_key: str
     is_active: bool = True
     created_at: datetime
+    api_usages: List[ApiUsageResponse]
 
     class Config:
         orm_mode = True

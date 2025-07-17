@@ -7,6 +7,9 @@ from pydantic import ValidationError
 from database import get_session
 from pydantic import BaseModel
 import secrets
+from DAL_files.api_usage_dal import ApiUsageDAL
+from schemas.api_usage_schemas import ApiUsageCreate
+from models.api_usage import ApiUsage
 
 users_api_key_router = APIRouter()
 class UsersApiKeyNameUpdate(BaseModel):
@@ -24,12 +27,19 @@ async def create_api_key(data: UsersApiKeyCreate, db: AsyncSession = Depends(get
     try:
         dal = UsersApiKeyDAL(db)
         api_key = secrets.token_urlsafe(32)
-        return await dal.create_api_key(
+        api_key_obj = await dal.create_api_key(
             user_id=data.user_id,
             api_key=api_key,
             name=data.name,
             expires_at=data.expires_at
         )
+        # Create ApiUsage entry linked to this API key using DAL method
+        api_usage_dal = ApiUsageDAL()
+        usage_data = ApiUsageCreate(userId=data.user_id)
+        await api_usage_dal.create_usage_with_user_id(usage_data, db, users_api_key_id=api_key_obj.users_api_key_id)
+        # Re-fetch the API key with api_usages loaded
+        api_key_obj = await dal.get_api_key(api_key_obj.api_key)
+        return api_key_obj
     except IntegrityError as e:
         # Handle database constraint violations (e.g., duplicate key, foreign key violations)
         error_str = str(e)

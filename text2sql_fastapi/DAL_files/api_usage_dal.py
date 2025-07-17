@@ -180,7 +180,7 @@ class ApiUsageDAL:
         await db_session.commit()
         return True
 
-    async def create_usage_with_user_id(self, usage_data: ApiUsageCreate, db_session: AsyncSession) -> ApiUsage:
+    async def create_usage_with_user_id(self, usage_data: ApiUsageCreate, db_session: AsyncSession, users_api_key_id=None) -> ApiUsage:
         """
         Create a new API usage record for a given user. chatUsage and invoiceUsage default to 0.
         """
@@ -188,7 +188,8 @@ class ApiUsageDAL:
         db_usage = ApiUsage(
             **data,
             chatUsage=0,
-            invoiceUsage=0
+            invoiceUsage=0,
+            users_api_key_id=users_api_key_id
         )
         db_session.add(db_usage)
         await db_session.commit()

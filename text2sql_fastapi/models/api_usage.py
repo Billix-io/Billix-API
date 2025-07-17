@@ -15,6 +15,8 @@ class ApiUsage(Base):
     invoiceUsage = Column(Integer, nullable=False, default=0)
     resetDate = Column(DateTime, nullable=False, default=datetime.utcnow)
     createdAt = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updatedAt = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow) 
+    updatedAt = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    users_api_key_id = Column(UUID(as_uuid=True), ForeignKey('users_api_key.users_api_key_id'), nullable=True)
 
     user = relationship("User", back_populates="api_usages")
+    users_api_key = relationship("UsersApiKey", back_populates="api_usages")

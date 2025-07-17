@@ -16,4 +16,5 @@ class UsersApiKey(Base):
     expires_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    user = relationship("User", back_populates="api_keys") 
+    user = relationship("User", back_populates="api_keys")
+    api_usages = relationship("ApiUsage", back_populates="users_api_key") 
