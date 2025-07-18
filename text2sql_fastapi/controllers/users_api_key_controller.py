@@ -10,6 +10,7 @@ import secrets
 from DAL_files.api_usage_dal import ApiUsageDAL
 from schemas.api_usage_schemas import ApiUsageCreate
 from models.api_usage import ApiUsage
+from typing import List
 
 users_api_key_router = APIRouter()
 class UsersApiKeyNameUpdate(BaseModel):
@@ -82,7 +83,9 @@ async def list_user_api_keys(user_id: str, db: AsyncSession = Depends(get_sessio
     List all API keys for a given user.
     """
     dal = UsersApiKeyDAL(db)
-    return await dal.get_user_api_keys(user_id)
+    user_api_keys=await dal.get_user_api_keys(user_id)
+
+    return user_api_keys
 
 @users_api_key_router.get("/user/{user_id}/active", response_model=list[UsersApiKeyOut])
 async def list_user_active_api_keys(user_id: str, db: AsyncSession = Depends(get_session)):
@@ -92,7 +95,7 @@ async def list_user_active_api_keys(user_id: str, db: AsyncSession = Depends(get
     dal = UsersApiKeyDAL(db)
     return await dal.get_user_active_api_keys(user_id)
 
-@users_api_key_router.get("/{api_key}", response_model=UsersApiKeyOut)
+@users_api_key_router.get("/{api_key}", response_model=List[UsersApiKeyOut])
 async def get_api_key(api_key: str, db: AsyncSession = Depends(get_session)):
     """
     Retrieve an API key by its value.

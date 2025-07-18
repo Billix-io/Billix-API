@@ -41,13 +41,15 @@ async def chat_usage_checker(
     api_key_obj = result.scalar_one_or_none()
     if not api_key_obj:
         raise HTTPException(status_code=401, detail="Invalid API key")
-    user_id = api_key_obj.user_id
+    api_key_id = api_key_obj.users_api_key_id
+    user_id=api_key_obj.user_id
 
     # 2. Get API usage for user
     result = await session.execute(
-        select(ApiUsage).where(ApiUsage.userId == user_id)
+        select(ApiUsage).where(ApiUsage.users_api_key_id == api_key_id)
     )
     usage_obj = result.scalar_one_or_none()
+    
     if not usage_obj:
         raise HTTPException(status_code=404, detail="API usage not found for user")
     chat_usage = usage_obj.chatUsage
@@ -95,11 +97,12 @@ async def invoice_usage_checker(
     api_key_obj = result.scalar_one_or_none()
     if not api_key_obj:
         raise HTTPException(status_code=401, detail="Invalid API key")
-    user_id = api_key_obj.user_id
+    api_key_id = api_key_obj.users_api_key_id
+    user_id=api_key_obj.user_id
 
     # 2. Get API usage for user
     result = await session.execute(
-        select(ApiUsage).where(ApiUsage.userId == user_id)
+        select(ApiUsage).where(ApiUsage.users_api_key_id == api_key_id)
     )
     usage_obj = result.scalar_one_or_none()
     if not usage_obj:

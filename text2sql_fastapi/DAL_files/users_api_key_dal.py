@@ -32,10 +32,10 @@ class UsersApiKeyDAL:
         Retrieve an API key by its value, including related api_usages.
         """
         result = await self.db_session.execute(
-            select(UsersApiKey).options(selectinload(UsersApiKey.api_usages)).where(UsersApiKey.api_key == api_key)
+            select(UsersApiKey).where(UsersApiKey.api_key == api_key)
         )
         # return result.scalar_one_or_none()
-        return result.scalars().first()
+        return result.scalars().all()
 
     async def get_user_api_keys(self, user_id):
         """
